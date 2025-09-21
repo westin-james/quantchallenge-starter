@@ -2,24 +2,31 @@ import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator, TransformerMixin
 
-Y2_TREE_BASE = ["A","K","B","D","F"]
-Y2_FEATS_RIDGE = ["D","K","A"]
+Y2_FEATS_RIDGE = ["D", "K", "A"]
 
 Y2_LAGS_STD = [1, 2, 5, 20]
 Y2_ROLL_STD = [5, 20]
 Y2_LAGS_A = [1, 2, 3, 5, 10, 20]
 Y2_ROLL_A = [5, 10, 20]
 
+def _y2_tree_base(train_df):
+    base = ["A","K","B","D","F"]
+    for c in ["O","P"]:
+        if c in train_df.columns:
+            base.append(c)
+    return base
+
 def make_enhanced_y2_features(train_df, test_df, y1_train=None, y1_test=None, include_time=True):
-    base_cols = (["time"] if include_time else []) + Y2_TREE_BASE
+    base_cols = (["time"] if include_time else []) + _y2_tree_base(train_df)
     df_all = pd.concat([train_df[base_cols], test_df[base_cols]], axis=0, ignore_index=True)
-    df_all = df_all.sort_values("time" if include_time else df_all.index.name).reset_index(drop=True)
+    if include_time:
+        df_all = df_all.sort_values("time").reset_index(drop=True)
 
     if (y1_train is not None) and (y1_test is not None):
         y1_all = pd.concat([pd.Series(y1_train), pd.Series(y1_test)], axis=0, ignore_index=True)
         df_all["Y1_pred"] = y1_all
 
-    for c in Y2_TREE_BASE:
+    for c in _y2_tree_base(train_df):
         lags = Y2_LAGS_A if c == "A" else Y2_LAGS_STD
         rolls = Y2_ROLL_A if c == "A" else Y2_ROLL_STD
         for L in lags:
@@ -33,8 +40,7 @@ def make_enhanced_y2_features(train_df, test_df, y1_train=None, y1_test=None, in
             df_all[f"{c}_rmin{W}"] = m.min()
             df_all[f"{c}_rmax{W}"] = m.max()
             returns = df_all[c].pct_change(1).replace([np.inf, -np.inf], 0.0)
-            vol = returns.rolling(W, min_periods=max(2, W//2)).std()
-            df_all[f"{c}_vol{W}"] = vol
+            df_all[f"{c}_vol{W}"] = returns.rolling(W, min_periods=max(2, W//2)).std()
             rng = df_all[f"{c}_rmax{W}"] - df_all[f"{c}_rmin{W}"]
             df_all[f"{c}_relpos{W}"] = (df_all[c] - df_all[f"{c}_rmin{W}"]) / (rng + 1e-8)
 
@@ -97,7 +103,7 @@ class Y2TinyInteractions(BaseEstimator, TransformerMixin):
     def fit(self, X, y=None): return self
     def transform(self, X):
         import numpy as np, pandas as pd
-        df = X if hasattr(X, "values") else pd.DataFrame(X, columns=self.colnames)
+        df = X.copy()
         d = df["D"].values
         k = df["K"].values
         a = df["A"].values

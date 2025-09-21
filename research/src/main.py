@@ -19,8 +19,8 @@ def lgb_y2_enhanced_eval_adapter(target_key, X, y_by_target, ctx):
 def main():
     ######################## 1. LOADING DATA ########################
     print("\n1. LOADING DATA\n")
-    train_df, test_df = load_train_test()
-    X_train, y_by_target, X_test = build_matrices(train_df, test_df)
+    train_df, test_df, feature_cols = load_train_test()
+    X_train, y_by_target, X_test = build_matrices(train_df, test_df, feature_cols)
 
     ######################## 2. CROSS VALIDATION SETUP ########################
     print("\n\n2. CROSS VALIDATION SETUP\n")
@@ -31,7 +31,8 @@ def main():
     print("\n\n3. EVALUATE ALL MODELS (Y1 & Y2\n")
     custom = {"lgb_y2_enhanced": lgb_y2_enhanced_eval_adapter}
     ctx = {"train_df": train_df, "test_df": test_df}
-    cv_long = crossval_grid(X_train, y_by_target, tscv, MODEL_KEYS, scoring="r2", custom_evaluators=custom, ctx=ctx)
+    cv_long = crossval_grid(X_train, y_by_target, tscv, MODEL_KEYS, scoring="r2", 
+                            custom_evaluators=custom, ctx=ctx)
     
     summary = summarize_wide(cv_long)
     print(summary.to_string(index=False))
@@ -52,7 +53,7 @@ def main():
     print(f"Predictions saved to: {out_path}")
 
     ######################## 7. VISUALIZATION ########################
-    print("\n\n7. VISUALIZATION\n")
+    print("\n\n7. VISUALIZATIONS\n")
     from .visualize import plot_cv_summary
     plot_cv_summary(cv_long, summary, importances_by_target=None)
 
