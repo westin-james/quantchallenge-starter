@@ -8,6 +8,8 @@ from src.config import MODEL_KEYS
 # Custom evaluator hook for lgb_y2_enhanced
 from src.y2_enhanced import EnhancedConfig, evaluate_y2_enhanced_cv
 
+from src.visualize import save_all_plots
+
 def lgb_y2_enhanced_eval_adapter(target_key, X, y_by_target, ctx):
     # Only applies to Y2
     if target_key != "Y2":
@@ -18,17 +20,17 @@ def lgb_y2_enhanced_eval_adapter(target_key, X, y_by_target, ctx):
 
 def main():
     ######################## 1. LOADING DATA ########################
-    print("\n1. LOADING DATA\n")
+    print("\n ####################### 1. LOADING DATA ########################################\n")
     train_df, test_df, feature_cols = load_train_test()
     X_train, y_by_target, X_test = build_matrices(train_df, test_df, feature_cols)
 
     ######################## 2. CROSS VALIDATION SETUP ########################
-    print("\n\n2. CROSS VALIDATION SETUP\n")
+    print("\n######################## 2. CROSS VALIDATION SETUP ###############################\n")
     tscv = make_timeseries_cv()
     print("Using 3-fold time series crossval")
 
     ######################## 3. EVALUATE MODELS ########################
-    print("\n\n3. EVALUATE ALL MODELS (Y1 & Y2\n")
+    print("\n######################## 3. EVALUATE ALL MODELS (Y1 & Y2) ########################\n")
     custom = {"lgb_y2_enhanced": lgb_y2_enhanced_eval_adapter}
     ctx = {"train_df": train_df, "test_df": test_df}
     cv_long = crossval_grid(X_train, y_by_target, tscv, MODEL_KEYS, scoring="r2", 
@@ -38,24 +40,35 @@ def main():
     print(summary.to_string(index=False))
 
     ######################## 4. SELECT BEST MODELS ########################
-    print("\n\n4. SELECT BEST PER TARGET\n")
+    print("\n######################## 4. SELECT BEST PER TARGET ###############################\n")
     selections = pick_best_per_target(cv_long)
     print(f"Best model per target: {selections}")
 
     ######################## 5. TRAIN FINAL MODELS ########################
-    print("\n\n5. TRAIN FINAL MODELS\n")
+    print("\n######################## 5. TRAIN FINAL MODELS ###################################\n")
     fitted_by_target = train_best_models(X_train, y_by_target, selections, ctx)
 
     ######################## 6. PREDICTIONS ########################
-    print("\n\n6. PREDICTIONS\n")
+    print("\n######################## 6. PREDICTIONS ##########################################\n")
 
     out_path = predict_submission(fitted_by_target, X_test, test_df)
     print(f"Predictions saved to: {out_path}")
 
     ######################## 7. VISUALIZATION ########################
-    print("\n\n7. VISUALIZATIONS\n")
-    from .visualize import plot_cv_summary
-    plot_cv_summary(cv_long, summary, importances_by_target=None)
+    print("\n######################## 7. VISUALIZATIONS #######################################\n")
+    res = save_all_plots(
+        run_name="model_eval",
+        cv_long_df=cv_long,
+        summary_wide=summary,
+        train_df=train_df,
+        test_df=test_df,
+        feature_cols=feature_cols,
+        fitted_by_target=fitted_by_target,
+        base_dir="./output",
+    )
+    print(f"Saved plots to: {res.run_dir}")
+    for key, path in res.files.items():
+        print(f"  - {key}: {path}")
 
     print("\nANALYSIS COMPLETE")
     print(f"Best combined performance: {summary['Combined'].iloc[0]:.4f}")
