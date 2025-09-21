@@ -1,7 +1,7 @@
 import numpy as np
 
 def purged_splits(n, n_splits=3, gap=0, min_train_frac=0.05):
-    idx = np.arrange(n)
+    idx = np.arange(n)
     boundaries = np.linspace(0, n, n_splits + 1, dtype=int)
     min_train = max(1, int(min_train_frac * n))
     for i in range(1, len(boundaries)):
@@ -16,4 +16,4 @@ def purged_splits(n, n_splits=3, gap=0, min_train_frac=0.05):
 
 def holdout_split(n, holdout_frac=0.2):
     cut = int(np.floor(n*(1.0-holdout_frac)))
-    return np.arrange(cut), np.arrange(cut, n)
+    return np.arange(cut), np.arange(cut, n)
