@@ -59,7 +59,7 @@ def train_best_models(X, y_by_target: Dict[str, pd.Series], selections: Dict[str
             meta_model.fit(X_meta, y_by_target["Y2"])
 
         fitted[tgt] = Y2EnhancedFitted(
-            lgb_models-lgb_models,
+            lgb_models=lgb_models,
             ridge_model=ridge_full,
             meta_model=meta_model,
             simple_w=simple_w,
