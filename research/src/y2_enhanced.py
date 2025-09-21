@@ -1,6 +1,5 @@
 import numpy as np
 import pandas as pd
-import lightgbm as lgb
 from dataclasses import dataclass
 from sklearn.base import clone
 from sklearn.pipeline import Pipeline
@@ -12,6 +11,12 @@ from sklearn.metrics import r2_score
 from src.feature_eng import make_enhanced_y2_features, Y2TinyInteractions, Y2_FEATS_RIDGE
 from src.splits import purged_splits, holdout_split
 from src.config import RANDOM_STATE
+
+try:
+    import lightgbm as lgb
+    HAS_LGB = True
+except Exception:
+    HAS_LGB = False
 
 class EnhancedConfig:
     N_SPLITS: int = 3
@@ -34,13 +39,9 @@ LGB_BASE = dict(
 )
 
 def _oof_predictions(model, X, y, splits, is_lgb=False, early_rounds=150):
-    n = len(y)
-    oof = np.zeros(n)
-    fold_r2 = []
-    best_rounds = []
+    n = len(y); oof = np.zeros(n); fold_r2 = []; best_rounds = []
     for tr_idx, va_idx in splits:
-        Xtr, Xva = X.iloc[tr_idx], X.iloc[va_idx]
-        ytr, yva = y.iloc[tr_idx], y.iloc[va_idx]
+        Xtr, Xva = X.iloc[tr_idx], X.iloc[va_idx]; ytr, yva = y.iloc[tr_idx], y.iloc[va_idx]
         if is_lgb:
             mdl = lgb.LGBMRegressor(**model.get_params())
             mdl.fit(Xtr, ytr, eval_set=[(Xva, yva)], callbacks=[lgb.early_stopping(early_rounds, verbose=False)])
@@ -48,9 +49,7 @@ def _oof_predictions(model, X, y, splits, is_lgb=False, early_rounds=150):
             best_it = getattr(mdl, "best_iteration_", getattr(mdl, "best_iteration", LGB_BASE["n_estimators"]))
             best_rounds.append(int(best_it))
         else:
-            mdl = clone(model)
-            mdl.fit(Xtr,ytr)
-            pred = mdl.predict(Xva)
+            mdl = clone(model); mdl.fit(Xtr,ytr); pred = mdl.predict(Xva)
         oof[va_idx] = pred; fold_r2.append(r2_score(yva, pred))
     return oof, fold_r2, best_rounds
 
@@ -67,7 +66,7 @@ def enhanced_y1_selection(train_df, y1, splits):
     for a, l1 in enet_cfgs:
         m = Pipeline([("scaler", StandardScaler()), ("enet", ElasticNet(alpha=a, l1_ratio=l1, max_iter=2000))])
         oof, f, _ = _oof_predictions(m, train_df[Y1_FEATS], y1, splits, is_lgb=False)
-        scores[f"enet_{a:g}_l1{l1::g}"] = dict(oof=r2_score(y1, oof), mean_fold=float(np.mean(f)))
+        scores[f"enet_{a:g}_l1{l1:g}"] = dict(oof=r2_score(y1, oof), mean_fold=float(np.mean(f)))
         cand[f"enet_{a:g}_l1{l1:g}"] = m
     best = max(scores.keys(), key=lambda k: scores[k]["mean_fold"])
     return cand[best], best, scores

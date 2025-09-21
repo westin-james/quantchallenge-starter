@@ -6,7 +6,7 @@ Y2_TREE_BASE = ["A","K","B","D","F"]
 Y2_FEATS_RIDGE = ["D","K","A"]
 
 Y2_LAGS_STD = [1, 2, 5, 20]
-Y2_ROLL_STD = [5,20]
+Y2_ROLL_STD = [5, 20]
 Y2_LAGS_A = [1, 2, 3, 5, 10, 20]
 Y2_ROLL_A = [5, 10, 20]
 
@@ -60,7 +60,7 @@ def make_enhanced_y2_features(train_df, test_df, y1_train=None, y1_test=None, in
     df_all["K_over_D"] = df_all["K"] / (df_all["D"].abs() + eps)
 
     for c1 in ["A", "K"]:
-        for c2 in ["B","D","F"]:
+        for c2 in ["B", "D", "F"]:
             if c1 != c2:
                 df_all[f"{c1}_times_{c2}"] = df_all[c1] * df_all[c2]
                 df_all[f"{c1}_minus_{c2}"] = df_all[c1] - df_all[c2]
@@ -69,7 +69,7 @@ def make_enhanced_y2_features(train_df, test_df, y1_train=None, y1_test=None, in
     if "Y1_pred" in df_all.columns:
         for c in ["A", "K", "D"]:
             df_all[f"Y1_times_{c}"] = df_all["Y1_pred"] * df_all[c]
-            df_all[f"Y1_over_{c}"] = df_all["Y1_pred"] / (df_all[c].ab() + eps)
+            df_all[f"Y1_over_{c}"] = df_all["Y1_pred"] / (df_all[c].abs() + eps)
     
     df_all = df_all.ffill().fillna(0.0)
 
@@ -91,7 +91,7 @@ def make_enhanced_y2_features(train_df, test_df, y1_train=None, y1_test=None, in
     return X_tr[keep_cols], X_te[keep_cols], keep_cols
 
 class Y2TinyInteractions(BaseEstimator, TransformerMixin):
-    def __init(self, colnames):
+    def __init__(self, colnames):
         self.colnames = colnames
         assert set(["D","K","A"]).issubset(set(colnames)), "D,K,A must be present"
     def fit(self, X, y=None): return self
