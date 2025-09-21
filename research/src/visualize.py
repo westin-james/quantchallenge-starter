@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Dict, Any, List
@@ -70,7 +70,7 @@ def plot_cv_summary(cv_long_df, summary_wide, importances_by_target=None):
 
 def plot_cv_folds_lines(cv_long_df: pd.DataFrame) -> plt.Figure:
     n_folds = max(len(s) for s in cv_long_df["Scores"])
-    x = np. arange(1, n_folds + 1)
+    x = np.arange(1, n_folds + 1)
 
     fig, ax = plt.subplots(figsize=(12,6))
     ax.set_title("Per-Fold R^2 by Model & Target", fontsize=14,fontweight="bold")
@@ -101,18 +101,18 @@ def plot_cv_folds_heatmap(cv_long_df: pd.DataFrame) -> plt.Figure:
     fig, ax = plt.subplots(figsize=(1.8 * max_folds + 6, 0.4 * len(labels) + 3))
     im = ax.imshow(M, aspect="auto")
     ax.set_title("Per-fold R^2 Heatmap", fontsize = 14, fontweight="bold")
-    ax.set_xticks(np.arange(len(labels)))
+    ax.set_xticks(np.arange(max_folds))
     ax.set_xticklabels([f"F{c+1}" for c in range(max_folds)])
     ax.set_yticks(np.arange(len(labels)))
     ax.set_yticklabels(labels)
-    fig.colorbhar(im, ax=ax, fraction=0.046, pad=0.04, label="R^2")
+    fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04, label="R^2")
     plt.tight_layout()
     return fig
 
 def plot_missingness(train_df: pd.DataFrame, test_df: pd.DataFrame, feature_cols: List[str]) -> plt.Figure:
     tr_miss = train_df[feature_cols].isna().mean().values * 100.0
     te_miss = test_df[feature_cols].isna().mean().values * 100.0
-    x=np.arange(len(feature_cols))
+    x = np.arange(len(feature_cols))
     width = 0.4
 
     fig, ax = plt.subplots(figsize=(max(10, 0.5 * len(feature_cols) + 6), 6))
@@ -146,9 +146,9 @@ def plot_time_series_OP_vs_Y2(train_df: pd.DataFrame) -> Optional[plt.Figure]:
         ax2 = ax1.twinx()
         ax2.plot(t, train_df["Y2"].values, linestyle="--", alpha=0.7, label="Y2")
         ax2.set_ylabel("Y2")
-        lines, labels = ax1.get_legend_handles_labels()
-        lines2, labels2 = ax2.get_legend_handles_labels()
-        ax1.legend(lines + lines2, labels + labels2, loc="best")
+        lines, lbls = ax1.get_legend_handles_labels()
+        lines2, lbls2 = ax2.get_legend_handles_labels()
+        ax1.legend(lines + lines2, lbls + lbls2, loc="best")
     else:
         ax1.legend(loc="best")
     
@@ -195,28 +195,29 @@ def plot_y2_blend_info(y2_enhanced_fitted) -> plt.Figure:
     ax.bar([0], [simple_w], width=0.6, label="LGB weight", alpha=0.85)
     ax.bar([1], [1.0 - simple_w], width=0.6, label="Ridge weight", alpha=0.85)
     ax.set_xticks([0, 1]); ax.set_xticklabels(["LGB", "Ridge"])
-    ax.set_ylim(0 ,1)
+    ax.set_ylim(0, 1)
     ax.grid(True, axis="y", alpha=0.3)
     ax.legend(loc="best")
-    ax.test(0.5, 0.95, f"Meta-learning: {'ON' if use_meta else 'OFF'}",
+    ax.text(0.5, 0.95, f"Meta-learning: {'ON' if use_meta else 'OFF'}",
             ha="center", va="center", transform=ax.transAxes)
     plt.tight_layout()
     return fig
 
+@dataclass(frozen=True)
 class SaveResult:
     run_dir: str
     files: Dict[str, str]
 
 def save_all_plots(
-        *,
-        run_name: str,
-        cv_long_df: pd.DataFrame,
-        summary_wide: pd.DataFrame,
-        train_df: pd.DataFrame,
-        test_df: pd.DataFrame,
-        feature_cols: List[str],
-        fitted_by_target: Optional[Dict[str, Any]] = None,
-        base_dir: str | Path = "./output",
+    *,
+    run_name: str,
+    cv_long_df: pd.DataFrame,
+    summary_wide: pd.DataFrame,
+    train_df: pd.DataFrame,
+    test_df: pd.DataFrame,
+    feature_cols: List[str],
+    fitted_by_target: Optional[Dict[str, Any]] = None,
+    base_dir: str | Path = "./output",
 ) -> SaveResult:
     
     run_dir = make_run_dir(run_name=run_name, base=base_dir)
@@ -228,10 +229,10 @@ def save_all_plots(
 
     # 2. Per-fold lines and heatmap
     fig = plot_cv_folds_lines(cv_long_df)
-    saved["cv_fold_lines"] = _save(fig, run_dir, "cv_folds_lines.png")
+    saved["cv_folds_lines"] = _save(fig, run_dir, "cv_folds_lines.png")
 
     fig = plot_cv_folds_heatmap(cv_long_df)
-    saved["cv_fold_heatmap"] = _save(fig, run_dir, "cv_fold_heatmap.png")
+    saved["cv_folds_heatmap"] = _save(fig, run_dir, "cv_folds_heatmap.png")
 
     # 3. Missingness
     fig = plot_missingness(train_df, test_df, feature_cols)
@@ -243,7 +244,7 @@ def save_all_plots(
         saved["OP_vs_Y2"] = _save(fig, run_dir, "OP_vs_Y2.png")
 
     # 5. Enhanced Y2 extras
-    try: 
+    try:
         from src.y2_enhanced import Y2EnhancedFitted
         y2_model = fitted_by_target.get("Y2") if fitted_by_target else None
         if y2_model is not None and isinstance(y2_model, Y2EnhancedFitted):
@@ -255,12 +256,12 @@ def save_all_plots(
     except Exception:
         pass
 
-    manifest_path = (Path(run_dir) / "manifest.json").as_posix()
-    Path(manifest_path).write_text(json.dumps({
-        "run_dir": run_dir.as_posix() if isinstance(run_dir, Path) else str(run_dir),
+    manifest = {
+        "run_dir": str(run_dir),
         "files": saved,
-        "created_at": datetime.now().isoformat(timespec="seconds),"),
+        "created_at": datetime.now().isoformat(timespec="seconds"),
         "run_name": run_name,
-    }, indent=2))
+    } 
+    (run_dir / "manifest.json").write_text(json.dumps(manifest, indent=2))
 
     return SaveResult(run_dir=str(run_dir), files=saved)
