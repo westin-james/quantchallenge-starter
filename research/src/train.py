@@ -51,23 +51,23 @@ def train_best_models(X, y_by_target: Dict[str, pd.Series], selections: Dict[str
                 meta_model = Ridge2(alpha=1.0)
                 X_meta = np.column_stack([
                     np.mean([m.predict(art["X_y2_tr"]) for m in lgb_models], axis=0),
-                    ridge_full.predict(train_df[["D", "K", "A"]]),
+                    ridge_full.predict(train_df[["D","K","A"]]),
                     art["y1_oof"],
-                ])
-            # include interactions
-            X_meta = np.column_stack([X_meta, X_meta[:,0]*X_meta[:,1], X_meta[:,0]*X_meta[:,2]])
-            meta_model.fit(X_meta, y_by_target["Y2"])
+                    ])
+                # include interactions
+                X_meta = np.column_stack([X_meta, X_meta[:,0]*X_meta[:,1], X_meta[:,0]*X_meta[:,2]])
+                meta_model.fit(X_meta, y_by_target["Y2"])
 
-        fitted[tgt] = Y2EnhancedFitted(
-            lgb_models-lgb_models,
-            ridge_model=ridge_full,
-            meta_model=meta_model,
-            simple_w=simple_w,
-            use_meta=use_meta
-        )
-    else:
-        pipe = make_pipeline(mkey, tgt)
-        pipe.fit(X, y_by_target[tgt])
-        fitted[tgt] = pipe
+            fitted[tgt] = Y2EnhancedFitted(
+                lgb_models=lgb_models,
+                ridge_model=ridge_full,
+                meta_model=meta_model,
+                simple_w=simple_w,
+                use_meta=use_meta
+            )
+        else:
+            pipe = make_pipeline(mkey, tgt)
+            pipe.fit(X, y_by_target[tgt])
+            fitted[tgt] = pipe
     
     return fitted
