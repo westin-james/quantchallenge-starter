@@ -3,9 +3,10 @@ from pathlib import Path
 DATA_DIR = Path("./data")
 SUBMISSION_PATH = Path("preds.csv")
 
-COLUMN_NAMES = ['time','A','B','C','D','E','F','G','H','I','J','K','L','M','N','Y1','Y2']
-TEST_COLUMN_NAMES = ['id','time','A','B','C','D','E','F','G','H','I','J','K','L','M','N']
-FEATURE_COLS = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N']
+BASE_FEATURES = list("ABCDEFGHIJKLMN")
+# COLUMN_NAMES = ['time','A','B','C','D','E','F','G','H','I','J','K','L','M','N','Y1','Y2']
+# TEST_COLUMN_NAMES = ['id','time','A','B','C','D','E','F','G','H','I','J','K','L','M','N']
+# FEATURE_COLS = ['A','B','C','D','E','F','G','H','I','J','K','L','M','N']
 
 N_SPLITS = 3
 RANDOM_STATE = 42

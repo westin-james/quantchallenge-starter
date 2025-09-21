@@ -5,9 +5,14 @@ from sklearn.model_selection import cross_val_score
 
 from .models import make_pipeline, get_model_display_name
 
-def crossval_grid(X, y_by_target: Dict[str, pd.Series], cv, model_keys: List[str], 
-                  scoring: str = "r2", custom_evaluators: Optional[Dict[str, Callable]]= None,
-                  ctx: Optional[dict] = None,) -> pd.DataFrame:
+def crossval_grid(X, 
+                  y_by_target: Dict[str, pd.Series], 
+                  cv, 
+                  model_keys: List[str], 
+                  scoring: str = "r2", 
+                  custom_evaluators: Optional[Dict[str, Callable]] = None,
+                  ctx: Optional[dict] = None,
+) -> pd.DataFrame:
     rows=[]
     custom_evaluators = custom_evaluators or {}
 
@@ -50,8 +55,10 @@ def summarize_wide(cv_long_df: pd.DataFrame) -> pd.DataFrame:
     for col in ["Y1", "Y2"]:
         if col not in pivot: pivot[col] = np.nan
     pivot["Combined"] = (pivot["Y1"] + pivot["Y2"]) / 2.0
-    pivot = pivot.sort_values("Combined", ascending=False).reset_index(drop=True)
-    return pivot[["ModelKey","Model","Y1","Y2","Combined"]]
+    return pivot.sort_values("Combined", ascending=False).reset_index(drop=True)[
+        ["ModelKey","Model","Y1","Y2","Combined"]
+    ]
+
 
 def pick_best_per_target(cv_long_df: pd.DataFrame) -> Dict[str, str]:
     best = {}

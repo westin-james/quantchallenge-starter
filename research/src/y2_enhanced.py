@@ -6,10 +6,10 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import Ridge, ElasticNet
 from sklearn.metrics import r2_score
+from sklearn.impute import SimpleImputer
 
 
-from src.feature_eng import make_enhanced_y2_features, Y2TinyInteractions, Y2_FEATS_RIDGE
-from src.splits import purged_splits, holdout_split
+from src.feature_eng import make_enhanced_y2_features, Y2TinyInteractions
 from src.config import RANDOM_STATE
 
 try:
@@ -30,6 +30,7 @@ class EnhancedConfig:
     USE_Y1_FOR_Y2: bool = True
     RIDGE_ALPHA_Y2: float = 100.0
     USE_Y2_INTERACTIONS: bool = True
+    USE_OP_IN_Y2_RIDGE: str = "auto"
 
 LGB_BASE = dict(
     objective="regression", metric="rmse", n_estimators=5000, num_leaves=15,
@@ -71,6 +72,23 @@ def enhanced_y1_selection(train_df, y1, splits):
     best = max(scores.keys(), key=lambda k: scores[k]["mean_fold"])
     return cand[best], best, scores
 
+def purged_splits(n, n_splits=3, gap=0, min_train_frac=0.05):
+    idx = np.arange(n)
+    boundaries = np.linspace(0, n, n_splits + 1, dtype=int)
+    min_train = max(1, int(min_train_frac * n))
+    for i in range(1, len(boundaries)):
+        val_start = boundaries[i - 1]
+        val_end = boundaries[i]
+        va_idx = idx[val_start:val_end]
+        tr_end = max(min_train, val_start - gap)
+        tr_idx = idx[:tr_end]
+        if len(tr_idx) == 0:
+            continue
+        yield tr_idx, va_idx
+
+def holdout_split(n, holdout_frac=0.2):
+    cut = int(np.floor(n*(1.0-holdout_frac)))
+    return np.arange(cut), np.arange(cut, n)
 
 def evaluate_y2_enhanced_cv(train_df, test_df, y1, y2, cfg: EnhancedConfig):
     n = len(train_df)
@@ -84,18 +102,46 @@ def evaluate_y2_enhanced_cv(train_df, test_df, y1, y2, cfg: EnhancedConfig):
 
     X_y2_tr, X_y2_te, cols = make_enhanced_y2_features(train_df, test_df, y1_oof, y1_test_pred, include_time=True)
 
-    probe = dict(LGB_BASE)
-    probe['n_estimators'] = 200
+    probe = dict(LGB_BASE); probe['n_estimators'] = 200
     lgb_probe = lgb.LGBMRegressor(**probe)
     lgb_probe.fit(X_y2_tr.iloc[tr_idx], y2.iloc[tr_idx])
     gain = lgb_probe.booster_.feature_importance(importance_type="gain")
     keep = list(pd.DataFrame({"f": X_y2_tr.columns, "g": gain}).sort_values("g", ascending=False).head(cfg.TOPK_Y2)["f"])
     X_y2_tr = X_y2_tr[keep]; X_y2_te = X_y2_te[keep]
 
-    y2_ridge = Pipeline([("inter", Y2TinyInteractions(colnames=Y2_FEATS_RIDGE)),
-                         ("scaler", StandardScaler()),
-                         ("ridge", Ridge(alpha=cfg.RIDGE_ALPHA_Y2))])
-    y2_ridge_oof, _, _ = _oof_predictions(y2_ridge, train_df[Y2_FEATS_RIDGE], y2, splits, is_lgb=False)
+    base_cols = [c for c in ["D", "K", "A"] if c in train_df.columns]
+    ext_cols = [c for c in ["D","K","A","O","P"] if c in train_df.columns]
+
+    def build_ridge(cols):
+        return Pipeline([
+            ("imputer", SimpleImputer(strategy="median")),
+            ("inter", Y2TinyInteractions(colnames=cols)),
+            ("scaler", StandardScaler()),
+            ("ridge", Ridge(alpha=cfg.RIDGE_ALPHA_Y2))
+        ])
+
+    candidates = []
+
+    ridge_base = build_ridge(base_cols)
+    oof_base, _, _ = _oof_predictions(ridge_base, train_df[base_cols], y2, splits, is_lgb=False)
+    score_base = r2_score(y2.values, oof_base)
+    candidates.append(("base", base_cols, ridge_base, oof_base, score_base))
+
+    if (cfg.USE_OP_IN_Y2_RIDGE != "never") and (len(ext_cols) > len(base_cols)):
+        ridge_ext = build_ridge(ext_cols)
+        oof_ext, _, _ = _oof_predictions(ridge_ext, train_df[ext_cols], y2, splits, is_lgb=False)
+        score_ext = r2_score(y2.values, oof_ext)
+        candidates.append(("ext", ext_cols, ridge_ext, oof_ext, score_ext))
+    
+    if cfg.USE_OP_IN_Y2_RIDGE == "always" and len(ext_cols) > len(base_cols):
+        only_ext = [c for c in candidates if c[0] == "ext"]
+        choice = max(only_ext or candidates, key=lambda t: t[4])
+    elif cfg.USE_OP_IN_Y2_RIDGE == "never":
+        choice = [c for c in candidates if c[0] == "base"][0]
+    else:
+        choice = max(candidates, key=lambda t: t[4])
+    
+    _tag, y2_ridge_cols, y2_ridge, y2_ridge_oof, _score = choice
 
     grid_lr = [0.015, 0.02] if cfg.SPEED_MODE else [0.01, 0.015, 0.02]
     grid_sub = [0.70] if cfg.SPEED_MODE else [0.65, 0.70, 0.75]
@@ -150,33 +196,37 @@ def evaluate_y2_enhanced_cv(train_df, test_df, y1, y2, cfg: EnhancedConfig):
         meta_r2 = r2_score(y2.values, meta_pred)
         use_meta = meta_r2 > simple_r2
     
-    mean_r2 = max(meta_r2, simple_r2)
+    mean_r2 = float(max(meta_r2, simple_r2))
+
     return dict(
-        MeanR2=float(mean_r2),
+        MeanR2=mean_r2,
         Details=dict(
             best_params={k: (int(v) if isinstance(v, (np.integer,)) else v) for k, v in best_combo.items()},
             final_rounds=int(final_rounds),
-            simple_w=float(simple_w),
+            simple_w=simple_w,
             used_meta=bool(use_meta),
         ),
         CachedArtifacts=dict(
             X_y2_tr=X_y2_tr, X_y2_te=X_y2_te, keep_cols=keep,
             best_params=best_combo, final_rounds=final_rounds,
             y1_model=y1_model, y1_oof=y1_oof, y1_test_pred=y1_test_pred,
-            y2_ridge=y2_ridge
+            y2_ridge=y2_ridge, y2_ridge_cols=y2_ridge_cols,
         )
     )
 
+def y2_ridge_cols_from_choice(choice_tuple):
+    _, cols, _, _, _ = choice_tuple
+    return cols
+
 class Y2EnhancedFitted:
-    def __init__(self, lgb_models, ridge_model, meta_model, simple_w, use_meta, X_lgb_test):
+    def __init__(self, lgb_models, ridge_model, meta_model, simple_w, use_meta, X_lgb_test, ridge_feats):
         self.lgb_models = lgb_models
         self.ridge_model = ridge_model
         self.meta_model = meta_model
         self.simple_w = simple_w
         self.use_meta = use_meta
-        
         self.X_lgb_test = X_lgb_test
-        self.ridge_feats = ["D", "K", "A"]
+        self.ridge_feats = ridge_feats
 
     def predict(self, X_lgb, X_ridge, extra_meta=None):
         import numpy as np

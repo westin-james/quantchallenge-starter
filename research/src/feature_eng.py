@@ -6,8 +6,8 @@ Y2_FEATS_RIDGE = ["D", "K", "A"]
 
 Y2_LAGS_STD = [1, 2, 5, 20]
 Y2_ROLL_STD = [5, 20]
-Y2_LAGS_A = [1, 2, 3, 5, 10, 20]
-Y2_ROLL_A = [5, 10, 20]
+Y2_LAGS_A   = [1, 2, 3, 5, 10, 20]
+Y2_ROLL_A   = [5, 10, 20]
 
 def _y2_tree_base(train_df):
     base = ["A","K","B","D","F"]
@@ -16,7 +16,11 @@ def _y2_tree_base(train_df):
             base.append(c)
     return base
 
-def make_enhanced_y2_features(train_df, test_df, y1_train=None, y1_test=None, include_time=True):
+def make_enhanced_y2_features(train_df: pd.DataFrame, 
+                              test_df: pd.DataFrame, 
+                              y1_train=None, 
+                              y1_test=None, 
+                              include_time: bool = True):
     base_cols = (["time"] if include_time else []) + _y2_tree_base(train_df)
     df_all = pd.concat([train_df[base_cols], test_df[base_cols]], axis=0, ignore_index=True)
     if include_time:
@@ -27,12 +31,14 @@ def make_enhanced_y2_features(train_df, test_df, y1_train=None, y1_test=None, in
         df_all["Y1_pred"] = y1_all
 
     for c in _y2_tree_base(train_df):
-        lags = Y2_LAGS_A if c == "A" else Y2_LAGS_STD
-        rolls = Y2_ROLL_A if c == "A" else Y2_ROLL_STD
+        lags    = Y2_LAGS_A if c == "A" else Y2_LAGS_STD
+        rolls   = Y2_ROLL_A if c == "A" else Y2_ROLL_STD
+
         for L in lags:
             df_all[f"{c}_lag{L}"] = df_all[c].shift(L)
         df_all[f"{c}_diff1"] = df_all[c].diff(1)
         df_all[f"{c}_diff2"] = df_all[c].diff(2)
+
         for W in rolls:
             m = df_all[c].rolling(W, min_periods=max(2, W//2))
             df_all[f"{c}_rmean{W}"] = m.mean()
@@ -81,6 +87,7 @@ def make_enhanced_y2_features(train_df, test_df, y1_train=None, y1_test=None, in
 
     n_tr = len(train_df)
     X_all = df_all.copy()
+
     train_part = X_all.iloc[:n_tr]
     clip_lo = train_part.quantile(0.005, numeric_only=True)
     clip_hi = train_part.quantile(0.995, numeric_only=True)
@@ -100,12 +107,10 @@ class Y2TinyInteractions(BaseEstimator, TransformerMixin):
     def __init__(self, colnames):
         self.colnames = colnames
         assert set(["D","K","A"]).issubset(set(colnames)), "D,K,A must be present"
-    def fit(self, X, y=None): return self
+    def fit(self, X, y=None): 
+        return self
     def transform(self, X):
-        import numpy as np, pandas as pd
-        df = X.copy()
-        d = df["D"].values
-        k = df["K"].values
-        a = df["A"].values
+        df = X if hasattr(X, "values") else pd.DataFrame(X, columns=self.colnames)
+        d = df["D"].values; k = df["K"].values; a = df["A"].values
         inter = np.vstack([d*k, a*k, a*d]).T
         return np.hstack([df.values, inter])

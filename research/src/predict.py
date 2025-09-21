@@ -1,12 +1,12 @@
 import pandas as pd
-from .config import SUBMISSION_PATH, FEATURE_COLS
+from .config import SUBMISSION_PATH
 from src.y2_enhanced import Y2EnhancedFitted
 
 def predict_submission(fitted_by_target, X_test, test_df):
-    # Y1
+    # Y1 predictions
     y1_pred = fitted_by_target["Y1"].predict(X_test)
 
-    # Y2
+    # Y2 predictions
     y2_model = fitted_by_target["Y2"]
 
     if isinstance(y2_model, Y2EnhancedFitted):
