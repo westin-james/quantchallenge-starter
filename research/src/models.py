@@ -24,7 +24,7 @@ def make_pipeline(model_key: str, target_key: str) -> Pipeline:
     
     if model_key == "lgb":
         assert HAS_LGB, "LightGBM not available"
-        return Pipeline([("model", RandomForestRegressor(**RF_PARAMS))])
+        return Pipeline([("model", lgb.LGBMRegressor(**LGB_BASE))])
     
     if model_key == "lgb_y2_enhanced":
         raise ValueError("lgb_y2_enhanced is a composite model; use custom evaluator/trainer.")
