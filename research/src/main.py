@@ -8,7 +8,7 @@ from .config import MODEL_KEYS
 # Custom evaluator hook for lgb_y2_enhanced
 from .y2_enhanced import EnhancedConfig, evaluate_y2_enhanced_cv
 
-def lgb_y2_enhanced_eval_adaptor(target_key, X, y_by_target, ctx):
+def lgb_y2_enhanced_eval_adapter(target_key, X, y_by_target, ctx):
     # Only applies to Y2
     if target_key != "Y2":
         return None
