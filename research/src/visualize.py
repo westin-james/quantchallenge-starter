@@ -225,23 +225,23 @@ def save_all_plots(
 
     # 1. Summary
     fig = plot_cv_summary(cv_long_df, summary_wide)
-    saved["cv_summary"] = _save(fig, run_dir, "cv_summary.png")
+    saved["cv_summary"] = _save(fig, run_dir, "P1-cv_summary.png")
 
     # 2. Per-fold lines and heatmap
     fig = plot_cv_folds_lines(cv_long_df)
-    saved["cv_folds_lines"] = _save(fig, run_dir, "cv_folds_lines.png")
+    saved["cv_folds_lines"] = _save(fig, run_dir, "P2-cv_folds_lines.png")
 
     fig = plot_cv_folds_heatmap(cv_long_df)
-    saved["cv_folds_heatmap"] = _save(fig, run_dir, "cv_folds_heatmap.png")
+    saved["cv_folds_heatmap"] = _save(fig, run_dir, "P3-cv_folds_heatmap.png")
 
     # 3. Missingness
     fig = plot_missingness(train_df, test_df, feature_cols)
-    saved["missingness"] = _save(fig, run_dir, "missingness.png")
+    saved["missingness"] = _save(fig, run_dir, "P4-missingness.png")
 
     # 4. OP vs Y2 over time
     fig = plot_time_series_OP_vs_Y2(train_df)
     if fig is not None:
-        saved["OP_vs_Y2"] = _save(fig, run_dir, "OP_vs_Y2.png")
+        saved["OP_vs_Y2"] = _save(fig, run_dir, "P5-OP_vs_Y2.png")
 
     # 5. Enhanced Y2 extras
     try:
@@ -250,9 +250,9 @@ def save_all_plots(
         if y2_model is not None and isinstance(y2_model, Y2EnhancedFitted):
             fig = plot_lgb_importance_from_fitted(y2_model, top_n=25)
             if fig is not None:
-                saved["y2_lgb_importance"] = _save(fig, run_dir, "y2_lgb_importance.png")
+                saved["y2_lgb_importance"] = _save(fig, run_dir, "P6-y2_lgb_importance.png")
             fig = plot_y2_blend_info(y2_model)
-            saved["y2_blend"] = _save(fig, run_dir, "y2_blend.png")
+            saved["y2_blend"] = _save(fig, run_dir, "P7-y2_blend.png")
     except Exception:
         pass
 

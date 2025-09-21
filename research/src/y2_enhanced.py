@@ -8,7 +8,6 @@ from sklearn.linear_model import Ridge, ElasticNet
 from sklearn.metrics import r2_score
 from sklearn.impute import SimpleImputer
 
-
 from src.feature_eng import make_enhanced_y2_features, Y2TinyInteractions
 from src.config import RANDOM_STATE
 
