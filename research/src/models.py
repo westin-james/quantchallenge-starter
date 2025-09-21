@@ -1,6 +1,6 @@
 from typing import Callable, Dict, Optional
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import StandardScalar
+from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import LinearRegression, Ridge
 from sklearn.ensemble import RandomForestRegressor
 
