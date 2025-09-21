@@ -23,7 +23,7 @@ class EnhancedConfig:
     SPEED_MODE: bool = True
     USE_META_LEARNING: bool = True
     USE_Y1_FOR_Y2: bool = True
-    RIDGE_ALPHA_V2: float = 100.0
+    RIDGE_ALPHA_Y2: float = 100.0
     USE_Y2_INTERACTIONS: bool = True
 
 LGB_BASE = dict(
@@ -54,7 +54,7 @@ def _oof_predictions(model, X, y, splits, is_lgb=False, early_rounds=150):
         oof[va_idx] = pred; fold_r2.append(r2_score(yva, pred))
     return oof, fold_r2, best_rounds
 
-def enhanced_y1_selections(train_df, y1, splits):
+def enhanced_y1_selection(train_df, y1, splits):
     Y1_FEATS = ["G","J","H","C","M","E"]
     alphas = [6.0, 8.0, 10.0, 12.0, 15.0]
     enet_cfgs = [(10.0, 0.05), (12.0, 0.05)]
@@ -67,18 +67,18 @@ def enhanced_y1_selections(train_df, y1, splits):
     for a, l1 in enet_cfgs:
         m = Pipeline([("scaler", StandardScaler()), ("enet", ElasticNet(alpha=a, l1_ratio=l1, max_iter=2000))])
         oof, f, _ = _oof_predictions(m, train_df[Y1_FEATS], y1, splits, is_lgb=False)
-        scores[f"enet_{a:g}"] = dict(oof=r2_score(y1, oof), mean_fold=float(np.mean(f)))
-        cand[f"enet_{a:g}"] = m
+        scores[f"enet_{a:g}_l1{l1::g}"] = dict(oof=r2_score(y1, oof), mean_fold=float(np.mean(f)))
+        cand[f"enet_{a:g}_l1{l1:g}"] = m
     best = max(scores.keys(), key=lambda k: scores[k]["mean_fold"])
     return cand[best], best, scores
 
 
 def evaluate_y2_enhanced_cv(train_df, test_df, y1, y2, cfg: EnhancedConfig):
     n = len(train_df)
-    splits = list(purged_splits(n, cfg.N_SPLITS, cap=cfg.GAP, min_train_frac=cfg.MIN_TRAIN_FRAC))
-    tr_idx, ho_idx = holdout_split(n,cfg.HOLDOUT_FRAC)
+    splits = list(purged_splits(n, cfg.N_SPLITS, gap=cfg.GAP, min_train_frac=cfg.MIN_TRAIN_FRAC))
+    tr_idx, ho_idx = holdout_split(n, cfg.HOLDOUT_FRAC)
 
-    y1_model, y1_name, y1_scores = enhanced_y1_selections(train_df, y1, splits)
+    y1_model, y1_name, y1_scores = enhanced_y1_selection(train_df, y1, splits)
     y1_oof, _, _ = _oof_predictions(y1_model, train_df[["G","J","H","C","M","E"]], y1, splits, is_lgb=False)
     y1_model.fit(train_df[["G","J","H","C","M","E"]], y1)
     y1_test_pred = y1_model.predict(test_df[["G","J","H","C","M","E"]])
@@ -90,12 +90,12 @@ def evaluate_y2_enhanced_cv(train_df, test_df, y1, y2, cfg: EnhancedConfig):
     lgb_probe = lgb.LGBMRegressor(**probe)
     lgb_probe.fit(X_y2_tr.iloc[tr_idx], y2.iloc[tr_idx])
     gain = lgb_probe.booster_.feature_importance(importance_type="gain")
-    keep = list(pd.DataFrame({"f": X_y2_tr.columns, "g":gain}).sort_values("g", ascending=False).head(cfg.TOPK_Y2)["f"])
+    keep = list(pd.DataFrame({"f": X_y2_tr.columns, "g": gain}).sort_values("g", ascending=False).head(cfg.TOPK_Y2)["f"])
     X_y2_tr = X_y2_tr[keep]; X_y2_te = X_y2_te[keep]
 
     y2_ridge = Pipeline([("inter", Y2TinyInteractions(colnames=Y2_FEATS_RIDGE)),
                          ("scaler", StandardScaler()),
-                         ("ridge", Ridge(alpha=cfg.RIDGE_ALPHA_V2))])
+                         ("ridge", Ridge(alpha=cfg.RIDGE_ALPHA_Y2))])
     y2_ridge_oof, _, _ = _oof_predictions(y2_ridge, train_df[Y2_FEATS_RIDGE], y2, splits, is_lgb=False)
 
     grid_lr = [0.015, 0.02] if cfg.SPEED_MODE else [0.01, 0.015, 0.02]
@@ -108,7 +108,7 @@ def evaluate_y2_enhanced_cv(train_df, test_df, y1, y2, cfg: EnhancedConfig):
     grid_it = [2500] if cfg.SPEED_MODE else [3000, 4000, 5000]
 
     X_tr_hold = X_y2_tr.iloc[tr_idx]; X_ho_hold = X_y2_tr.iloc[ho_idx]
-    best_core, best_combo = -1e9, None
+    best_score, best_combo = -1e9, None
     for lr in grid_lr:
         for subs in grid_sub:
             for ff in grid_ff:
@@ -126,7 +126,6 @@ def evaluate_y2_enhanced_cv(train_df, test_df, y1, y2, cfg: EnhancedConfig):
                                             eval_set=[(X_ho_hold, y2.iloc[ho_idx])],
                                             callbacks=[lgb.early_stopping(100, verbose=False)])
                                     pred = mdl.predict(X_ho_hold)
-                                    score = mdl.predict(X_ho_hold)
                                     score = r2_score(y2.iloc[ho_idx], pred)
                                     if score > best_score:
                                         best_score = score; best_combo = params.copy()
@@ -141,12 +140,12 @@ def evaluate_y2_enhanced_cv(train_df, test_df, y1, y2, cfg: EnhancedConfig):
     simple = minimize_scalar(lambda w: -r2_score(y2.values, w*lgb_oof + (1-w)*y2_ridge_oof),
                              bounds=(0.0, 1.0), method='bounded')
     simple_w = float(simple.x)
-    simple_r2 = r2_score(y2.values,simple_w*lgb_oof + (1-simple_w)*y2_ridge_oof)
+    simple_r2 = r2_score(y2.values, simple_w*lgb_oof + (1-simple_w)*y2_ridge_oof)
 
     use_meta = False; meta_model = None; meta_r2 = -1e9
     if cfg.USE_META_LEARNING:
         from sklearn.linear_model import Ridge as Ridge2
-        X_meta = np.column_stack([lgb_oof, y2_ridge_oof, y1_oof, lgb_oof*y2_ridge_oof, lgb_oof*y1])
+        X_meta = np.column_stack([lgb_oof, y2_ridge_oof, y1_oof, lgb_oof*y2_ridge_oof, lgb_oof*y1_oof])
         meta_model = Ridge2(alpha=1.0).fit(X_meta, y2.values)
         meta_pred = meta_model.predict(X_meta)
         meta_r2 = r2_score(y2.values, meta_pred)
@@ -169,8 +168,8 @@ def evaluate_y2_enhanced_cv(train_df, test_df, y1, y2, cfg: EnhancedConfig):
         )
     )
 
-class V2EnhancedFitted:
-    def __init__(self,lgb_models, ridge_model, meta_model, simple_w, use_meta):
+class Y2EnhancedFitted:
+    def __init__(self, lgb_models, ridge_model, meta_model, simple_w, use_meta):
         self.lgb_models = lgb_models
         self.ridge_model = ridge_model
         self.meta_model = meta_model
