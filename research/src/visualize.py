@@ -24,7 +24,7 @@ def plot_cv_summary(cv_long_df, summary_wide, importances_by_target=None):
     ax2 = axes[0,1]
     labels = [f"{r.Model}-{r.Target}" for _, r in cv_long_df.iterrows()]
     ax2.boxplot(cv_long_df["Scores"].tolist(), labels=labels)
-    ax2.tick_params(axis='x')
+    ax2.tick_params(axis='x', rotation=75)
     ax2.set_title('CV Score Distributions')
     ax2.grid(True, alpha=0.3)
 

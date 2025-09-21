@@ -168,18 +168,22 @@ def evaluate_y2_enhanced_cv(train_df, test_df, y1, y2, cfg: EnhancedConfig):
     )
 
 class Y2EnhancedFitted:
-    def __init__(self, lgb_models, ridge_model, meta_model, simple_w, use_meta):
+    def __init__(self, lgb_models, ridge_model, meta_model, simple_w, use_meta, X_lgb_test):
         self.lgb_models = lgb_models
         self.ridge_model = ridge_model
         self.meta_model = meta_model
         self.simple_w = simple_w
         self.use_meta = use_meta
+        
+        self.X_lgb_test = X_lgb_test
+        self.ridge_feats = ["D", "K", "A"]
 
     def predict(self, X_lgb, X_ridge, extra_meta=None):
         import numpy as np
         lgb_pred = np.mean([m.predict(X_lgb) for m in self.lgb_models], axis=0)
         ridge_pred = self.ridge_model.predict(X_ridge)
         if self.use_meta and self.meta_model is not None and extra_meta is not None:
-            X_meta = np.column_stack([lgb_pred, ridge_pred, extra_meta, lgb_pred*ridge_pred, lgb_pred*extra_meta])
+            X_meta = np.column_stack([lgb_pred, ridge_pred, extra_meta, 
+                                      lgb_pred * ridge_pred, lgb_pred * extra_meta])
             return self.meta_model.predict(X_meta)
         return self.simple_w * lgb_pred + (1 - self.simple_w) * ridge_pred
