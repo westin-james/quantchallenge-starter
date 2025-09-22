@@ -165,11 +165,12 @@ def _asha_search(
         with tqdm(total=len(cur), desc=desc, ncols=100) as pbar:
             for p in cur:
                 p2 = dict(p)
-                p2["n_estimators"] = Bmdl = lgb.LGBMRegressor(**p)
+                p2["n_estimators"] = B
+                mdl = lgb.LGBMRegressor(**p)
                 mdl.fit(X_tr, y_tr, eval_set=[(X_ho, y_ho)], callbacks=[lgb.early_stopping(90, verbose=False)])
                 pred = mdl.predict(X_ho)
                 score = r2_score(y_ho, pred)
-                nxt_scores.append({score, p2})
+                nxt_scores.append((score, p2))
                 pbar.set_postfix({'best_R2': f'{max(nxt_scores, key=lambda t: t[0])[0]:.4f}'})
                 pbar.update(1)
         cur = promote(nxt_scores, keep_frac, by_lr=bucket_by_lr, random_frac=0.0)
@@ -231,14 +232,14 @@ def evaluate_y2_enhanced_cv(train_df, test_df, y1, y2, cfg: EnhancedConfig):
     
     _tag, y2_ridge_cols, y2_ridge, y2_ridge_oof, _score = choice
 
-    grid_lr = [0.0125, 0.015, 0.02] if cfg.SPEED_MODE else [0.01, 0.015, 0.02]
-    grid_sub = [0.70] if cfg.SPEED_MODE else [0.65, 0.70, 0.75]
-    grid_ff = [0.55, 0.60] if cfg.SPEED_MODE else [0.5, 0.55, 0.6, 0.65]
-    grid_min = [256, 384] if cfg.SPEED_MODE else [128, 256, 384]
-    grid_l2 = [45.0, 60.0] if cfg.SPEED_MODE else [30.0, 45.0, 60.0]
+    grid_lr = [0.01, 0.0125, 0.015, 0.0175, 0.019, 0.02] if cfg.SPEED_MODE else [0.01, 0.015, 0.02]
+    grid_sub = [0.65, 0.70, 0.75] if cfg.SPEED_MODE else [0.65, 0.70, 0.75]
+    grid_ff = [0.50, 0.55, 0.60, 0.65] if cfg.SPEED_MODE else [0.5, 0.55, 0.6, 0.65]
+    grid_min = [128, 160, 192, 224, 256, 320] if cfg.SPEED_MODE else [128, 256, 384]
+    grid_l2 = [30.0, 45.0, 60.0] if cfg.SPEED_MODE else [30.0, 45.0, 60.0]
     grid_l1 = [0.5] if cfg.SPEED_MODE else [0.5, 1.0]
-    grid_lea = [15] if cfg.SPEED_MODE else [15, 31]
-    grid_it = [2500, 3500] if cfg.SPEED_MODE else [3000, 4000, 5000]
+    grid_lea = [15, 31] if cfg.SPEED_MODE else [15, 31]
+    grid_it = [3000] if cfg.SPEED_MODE else [3000, 4000, 5000]
 
     total_combinations = len(grid_lr) * len(grid_sub) * len(grid_ff) * len(grid_min) * len(grid_l2) * len(grid_l1) * len(grid_lea) * len(grid_it)
 

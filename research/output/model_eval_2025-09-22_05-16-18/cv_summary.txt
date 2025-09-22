@@ -1,0 +1,10 @@
+       ModelKey                          Model       Y1       Y2  Combined
+             rf                  Random Forest 0.725860 0.641634  0.683747
+            lgb                       LightGBM 0.711294 0.614851  0.663073
+          ridge                          Ridge 0.738678 0.563479  0.651078
+         linreg              Linear Regression 0.738331 0.563697  0.651014
+lgb_y2_enhanced LightGBM Y2 (Enhanced + Blend)      NaN 0.681892       NaN
+y1_advanced_v11                y1_advanced_v11 0.712409      NaN       NaN
+
+ANALYSIS COMPLETE
+Best combined performance: 0.6972
