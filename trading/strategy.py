@@ -4,13 +4,135 @@ Quant Challenge 2025
 Algorithmic strategy template
 """
 
+import json
+from pathlib import Path
 from enum import Enum
-from typing import Optional, List, Dict
+from typing import Optional, Dict, Any
 
-from scraper import GameScraper
-import math
-import time
+# ------------------------ SCRAPER ------------------------ #
 
+_ALLOWED_KEYS = [
+    "home_away",
+    "home_score",
+    "away_score",
+    "event_type",
+    "player_name",
+    "substituted_player_name",
+    "shot_type",
+    "assist_player",
+    "rebound_type",
+    "coordinate_x",
+    "coordinate_y",
+    "time_seconds",
+    "price",
+    "float"
+]
+
+class GameScraper:
+
+    def __init__(self, out_path: Optional[str] = None) -> None:
+        self.events = []
+        self.out_path = Path(out_path) if out_path else None
+        self._last_home_score: Optional[int] = 0
+        self._last_away_score: Optional[int] = 0
+        self._last_time_seconds: Optional[float] = None
+        # Track latest market state
+        self._last_price: Optional[float] = None
+        self._last_float: Optional[float] = None
+    
+    def start_new_game(self, out_path: Optional[str] = None) -> None:
+        self.events = []
+        if out_path is not None:
+            self.out_path = Path(out_path)
+        self._last_home_score = 0
+        self._last_away_score = 0
+        self._last_time_seconds = None
+
+    def _append(self, entry: Dict[str, Any]) -> None:
+        normalized = {k: entry.get(k, None) for k in _ALLOWED_KEYS}
+        self.events.append(normalized)
+
+        if normalized["home_score"] is not None:
+            self._last_home_score = normalized["home_score"]
+        if normalized["away_score"] is not None:
+            self._last_away_score = normalized["away_score"]
+        if normalized["time_seconds"] is not None:
+            self._last_time_seconds = normalized["time_seconds"]
+        if normalized["price"] is not None:
+            self._last_price = normalized["price"]
+        if normalized["float"] is not None:
+            self._last_float = normalized["float"]
+            
+    def record_game_event(
+        self,
+        *,
+        home_away: Optional[str],
+        home_score: Optional[int],
+        away_score: Optional[int],
+        event_type: str,
+        player_name: Optional[str],
+        substituted_player_name: Optional[str],
+        shot_type: Optional[str],
+        assist_player: Optional[str],
+        rebound_type: Optional[str],
+        coordinate_x: Optional[float],
+        coordinate_y: Optional[float],
+        time_seconds: Optional[float],
+    ) -> None:
+        self._append(
+            {
+                "home_away": home_away if home_away is not None else "unknown",
+                "home_score": home_score,
+                "away_score": away_score,
+                "event_type": event_type,
+                "player_name": player_name,
+                "substituted_player_name": substituted_player_name,
+                "shot_type": shot_type,
+                "assist_player": assist_player,
+                "rebound_type": rebound_type,
+                "coordinate_x": coordinate_x,
+                "coordinate_y": coordinate_y,
+                "time_seconds": float(time_seconds) if time_seconds is not None else None,
+                "price": self._last_price,
+                "float": self._last_float,
+            }
+        )
+
+    def record_generic(
+            self, 
+            *, 
+            event_type: str, 
+            home_away: Optional[str] = "unknown",
+            price: Optional[float] = None,
+            capital_remaining: Optional[float] = None,
+    ) -> None:
+        self._append(
+            {
+                "home_away": home_away if home_away is not None else "unknown",
+                "home_score": self._last_home_score,
+                "away_score": self._last_away_score,
+                "event_type": event_type,
+                "player_name": None,
+                "substituted_player_name": None,
+                "shot_type": None,
+                "assist_player": None,
+                "rebound_type": None,
+                "coordinate_x": None,
+                "coordinate_y": None,
+                "time_seconds": self._last_time_seconds,
+                "price": price,
+                "float": capital_remaining,
+            }
+        )
+
+    def finalize(self) -> None:
+        if not self.out_path:
+            self.out_path = Path("game_debug.json")
+        self.out_path.parent.mkdir(parents=True, exist_ok=True)
+        with self.out_path.open("w", encoding="utf_8") as f:
+            json.dump(self.events, f, indent=2)
+
+# ------------------------ EXCHANGE API ------------------------ #
 class Side(Enum):
     BUY = 0
     SELL = 1
@@ -73,6 +195,8 @@ def cancel_order(ticker: Ticker, order_id: int) -> bool:
     """
     return 0
 
+# ------------------------ STRATEGY ------------------------ #
+
 class Strategy:
     """Template for a strategy."""
     def _make_out_path(self) -> str:
@@ -92,11 +216,12 @@ class Strategy:
         
         if not hasattr(self, "scraper"):
             self.scraper = GameScraper(self._make_out_path())
+        
         self.scraper.start_new_game(self._make_out_path())
 
-        self.home_score = 0
-        self.away_score = 0
-        self._last_time_seconds = None
+        self.home_score: int =0
+        self.away_score: int = 0
+        self._last_time_seconds: Optional[float] = None
 
         pass
 
@@ -124,7 +249,7 @@ class Strategy:
         print(f"Python Trade update: {ticker} {side} {quantity} shares @ {price}")
         # Log via scraper
         self.scraper.record_generic(
-            event_type=f"TRADE_UPDATE {ticker.name} {side.name} q={quantity} p={price}"
+            event_type=f"TRADE_UPDATE {ticker.name} {side.name} q={quantity} p={price}", price=price,
         )
 
     def on_orderbook_update(
@@ -144,9 +269,8 @@ class Strategy:
         """
         # Log orderbook changes
         self.scraper.record_generic(
-            event_type=f"ORDERBOOK_UPDATE {ticker.name} {side.name} q={quantity} p={price}"
+            event_type=f"ORDERBOOK_UPDATE {ticker.name} {side.name} q={quantity} p={price}", price=price,
         )
-        pass
 
     def on_account_update(
         self,
@@ -173,14 +297,12 @@ class Strategy:
         # Log fills
         self.scraper.record_generic(
             event_type=(
-                f"ACCOUNT_UPDATE {ticker.name} {side.name}"
+                f"ACCOUNT_UPDATE {ticker.name} {side.name} "
                 f"fill_q={quantity} fill_p={price} cap={capital_remaining}"
-            )
-        ),
-        price=price
-        capital_remaining=capital_remaining
-
-        pass
+            ),
+            price=price,
+            capital_remaining=capital_remaining,
+        )
 
     def on_game_event_update(self,
                            event_type: str,
@@ -234,6 +356,7 @@ class Strategy:
         self.scraper.record_game_event(
             home_away=home_away if home_away is not None else "unknown",
             home_score=home_score,
+            away_score=away_score,
             event_type=event_type,
             player_name=player_name,
             substituted_player_name=substituted_player_name,
