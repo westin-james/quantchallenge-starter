@@ -9,11 +9,33 @@ from sklearn.metrics import r2_score
 from sklearn.impute import SimpleImputer
 from tqdm import tqdm
 from itertools import product
-import math
-import random
+
+#--- Helpers -----
+
+def _finite_mask(*arrays):
+    import numpy as _np
+    # Broadcast-safe finite mask across 1D arrays of = length
+    mask = _np.ones_like(_np.asarray(arrays[0], dtype=float), dtype=bool)
+    for a in arrays:
+        mask &= _np.isfinite(_np.asarray(a, dtype=float))
+    return mask
+
+def _safe_r2(y_true, y_pred):
+    from sklearn.metrics import r2_score as _r2
+    import numpy as _np
+    y_true = _np.asarray(y_true, dtype=float)
+    y_pred = _np.asarray(y_pred, dtype=float)
+    m = _finite_mask(y_true, y_pred)
+    if m.sum() == 0:
+        return float("nan")
+    return _r2(y_true[m], y_pred[m])
+
 
 from src.feature_eng import make_enhanced_y2_features, Y2TinyInteractions
 from src.config import RANDOM_STATE
+from src.arx_boosting import (
+    arx_prepare, lgb_holdout_resid_score, oof_lgb_resid_level, decorrelate_after_topk,
+)
 
 try:
     import lightgbm as lgb
@@ -35,16 +57,33 @@ class EnhancedConfig:
     USE_Y2_INTERACTIONS: bool = True
     USE_OP_IN_Y2_RIDGE: str = "auto"
 
-#ASHA#
-ASHA_MODE: bool = True
-ASHA_BUDGETS = (900, 2000, 3500)
-ASHA_KEEP_FRAC: float = 1/3
-ASHA_BUCKET_BY_LR: bool = True
-ASHA_RANDOM_PROMOTE_FRAC: float = 0.05
+    # feature selection
+    TOPK_DECORRELATE: bool = True
+    DECORR_THRESH: float = 0.95
+
+    # Early-exit grid controls
+    MAX_GRID_COMBINATIONS: int = 16
+    EARLY_STOP_PATIENCE: int = 10
+    MIN_GAIN: float = 7.5e-4
+
+    # ARX / target transform / weights
+    AR_P: int = 8
+    USE_ASINH: bool = True
+    ASINH_SCALE_MULT: float = 3.0
+    USE_TIME_DECAY: bool = True
+    DECAY_STRENGTH: float = 1.2
+
+    # Train caps
+    PROBE_ITERS: int = 200
+    FINAL_ROUND_CAP: int = 2000
+
+    # Optional ASHA
+    ASHA_MODE: bool = False
 
 LGB_BASE = dict(
-    objective="regression", metric="rmse", n_estimators=5000, num_leaves=15,
-    learning_rate=0.015, reg_lambda=30.0, reg_alpha=0.5, min_data_in_leaf=256,
+    objective="huber", metric="rmse", alpha=0.9,
+    n_estimators=1200, num_leaves=31, learning_rate=0.02,
+    reg_lambda=45.0, reg_alpha=0.5, min_data_in_leaf=256,
     subsample=0.7, feature_fraction=0.6, bagging_freq=1, verbosity=-1,
     random_state=RANDOM_STATE, n_jobs=-1,
 )
@@ -100,84 +139,6 @@ def holdout_split(n, holdout_frac=0.2):
     cut = int(np.floor(n*(1.0-holdout_frac)))
     return np.arange(cut), np.arange(cut, n)
 
-#ASHA_HELPER#
-def _asha_search(
-    X_tr, y_tr, X_ho, y_ho,
-    base_params: dict,
-    grids: dict,
-    budgets=(900, 2000, 3500),
-    keep_frac: float = 1/3,
-    bucket_by_lr: bool = True,
-    random_promote_frac: float = 0.05,
-    seed: int = 42,
-):
-
-    rng = random.Random(seed)
-
-    combos = list(product(grids["lr"], grids["sub"], grids["ff"], grids["min"],
-                          grids["l2"], grids["l1"], grids["lea"]))
-    
-    rung0_scores = []
-    with tqdm(total=len(combos), desc=f"ASHA rung 1/{len(budgets)} (T={budgets[0]})", ncols=100) as pbar:
-        for (lr, subs, ff, mleaf, l2, l1, leaves) in combos:
-            p = dict(base_params,
-                     learning_rate=lr, subsample=subs, feature_fraction=ff,
-                     min_data_in_leaf=mleaf, reg_lambda=l2, reg_alpha=l1, num_leaves=leaves,
-                     n_estimators=budgets[0])
-            mdl = lgb.LGBMRegressor(**p)
-            mdl.fit(X_tr, y_tr, eval_set=[(X_ho, y_ho)], callbacks=[lgb.early_stopping(60, verbose=False)])
-            pred = mdl.predict(X_ho)
-            score = r2_score(y_ho, pred)
-            rung0_scores.append((score,p))
-            pbar.set_postfix({'best_R2': f'{max(rung0_scores, key=lambda t: t[0])[0]:.4f}'})
-            pbar.update(1)
-
-    def promote(scores, kfrac, by_lr=False, random_frac=0.0):
-        scores.sort(key=lambda t: t[0], reverse=True)
-        promoted = []
-        if by_lr:
-
-            buckets = {}
-            for s, p in scores:
-                buckets.setdefault(p["learning_rate"], []).append((s, p))
-            for lr_val, arr in buckets.items():
-                arr.sort(key=lambda t: t[0], reverse=True)
-                k = max(1, int(len(arr) * kfrac))
-                promoted.extend(p for _, p in arr[:k])
-        else:
-            k = max(1, int(len(scores) * kfrac))
-            promoted.extend(p for _, p in scores[:k])
-        if random_frac > 0.0 and scores is rung0_scores:
-            n_extra = max(0, int(len(scores) * random_frac))
-            tail = [p for _, p in scores[max(0, len(scores)//2):]]
-            rng.shuffle(tail)
-
-            for p in tail:
-                if p not in promoted and len(promoted) < k + n_extra:
-                    promoted.append(p)
-        return promoted
-        
-    cur = promote(rung0_scores, keep_frac, by_lr=bucket_by_lr, random_frac=random_promote_frac)
-
-    for r_idx, B in enumerate(budgets[1:], start=2):
-        nxt_scores = []
-        desc = f"ASHA rung {r_idx}/{len(budgets)} (T={B})"
-        with tqdm(total=len(cur), desc=desc, ncols=100) as pbar:
-            for p in cur:
-                p2 = dict(p)
-                p2["n_estimators"] = Bmdl = lgb.LGBMRegressor(**p)
-                mdl.fit(X_tr, y_tr, eval_set=[(X_ho, y_ho)], callbacks=[lgb.early_stopping(90, verbose=False)])
-                pred = mdl.predict(X_ho)
-                score = r2_score(y_ho, pred)
-                nxt_scores.append({score, p2})
-                pbar.set_postfix({'best_R2': f'{max(nxt_scores, key=lambda t: t[0])[0]:.4f}'})
-                pbar.update(1)
-        cur = promote(nxt_scores, keep_frac, by_lr=bucket_by_lr, random_frac=0.0)
-
-    final_best = max(nxt_scores if budgets[-1] != budgets[0] else rung0_scores, key=lambda t: t[0])
-    best_score, best_params = final_best[0], final_best[1]
-    return best_params, float(best_score)
-
 def evaluate_y2_enhanced_cv(train_df, test_df, y1, y2, cfg: EnhancedConfig):
     n = len(train_df)
     splits = list(purged_splits(n, cfg.N_SPLITS, gap=cfg.GAP, min_train_frac=cfg.MIN_TRAIN_FRAC))
@@ -190,12 +151,18 @@ def evaluate_y2_enhanced_cv(train_df, test_df, y1, y2, cfg: EnhancedConfig):
 
     X_y2_tr, X_y2_te, cols = make_enhanced_y2_features(train_df, test_df, y1_oof, y1_test_pred, include_time=True)
 
-    probe = dict(LGB_BASE); probe['n_estimators'] = 200
+    probe = dict(LGB_BASE); probe['n_estimators'] = cfg.PROBE_ITERS
     lgb_probe = lgb.LGBMRegressor(**probe)
     lgb_probe.fit(X_y2_tr.iloc[tr_idx], y2.iloc[tr_idx])
     gain = lgb_probe.booster_.feature_importance(importance_type="gain")
     keep = list(pd.DataFrame({"f": X_y2_tr.columns, "g": gain}).sort_values("g", ascending=False).head(cfg.TOPK_Y2)["f"])
+
+    if cfg.TOPK_DECORRELATE and len(keep) > 1:
+        keep = decorrelate_after_topk(X_y2_tr, keep, cfg.DECORR_THRESH)
+        print(f"After de-correlation, using {len(keep)} features.")
+
     X_y2_tr = X_y2_tr[keep]; X_y2_te = X_y2_te[keep]
+
 
     base_cols = [c for c in ["D", "K", "A"] if c in train_df.columns]
     ext_cols = [c for c in ["D","K","A","O","P"] if c in train_df.columns]
@@ -231,14 +198,14 @@ def evaluate_y2_enhanced_cv(train_df, test_df, y1, y2, cfg: EnhancedConfig):
     
     _tag, y2_ridge_cols, y2_ridge, y2_ridge_oof, _score = choice
 
-    grid_lr = [0.0125, 0.015, 0.02] if cfg.SPEED_MODE else [0.01, 0.015, 0.02]
+    grid_lr = [0.015, 0.02] if cfg.SPEED_MODE else [0.01, 0.015, 0.02]
     grid_sub = [0.70] if cfg.SPEED_MODE else [0.65, 0.70, 0.75]
     grid_ff = [0.55, 0.60] if cfg.SPEED_MODE else [0.5, 0.55, 0.6, 0.65]
     grid_min = [256, 384] if cfg.SPEED_MODE else [128, 256, 384]
     grid_l2 = [45.0, 60.0] if cfg.SPEED_MODE else [30.0, 45.0, 60.0]
     grid_l1 = [0.5] if cfg.SPEED_MODE else [0.5, 1.0]
     grid_lea = [15] if cfg.SPEED_MODE else [15, 31]
-    grid_it = [2500, 3500] if cfg.SPEED_MODE else [3000, 4000, 5000]
+    grid_it = [2500] if cfg.SPEED_MODE else [3000, 4000, 5000]
 
     total_combinations = len(grid_lr) * len(grid_sub) * len(grid_ff) * len(grid_min) * len(grid_l2) * len(grid_l1) * len(grid_lea) * len(grid_it)
 
@@ -247,81 +214,133 @@ def evaluate_y2_enhanced_cv(train_df, test_df, y1, y2, cfg: EnhancedConfig):
 
     X_tr_hold = X_y2_tr.iloc[tr_idx]; X_ho_hold = X_y2_tr.iloc[ho_idx]
     best_score, best_combo = -1e9, None
+    best_history = []
 
-    if cfg.ASHA_MODE:
-        grids = dict(lr=grid_lr, sub=grid_sub, ff=grid_ff, min=grid_min,
-                        l2=grid_l2, l1=grid_l1, lea=grid_lea)
-        best_combo, best_score = _asha_search(
-            X_tr_hold, y2.iloc[tr_idx], X_ho_hold, y2.iloc[ho_idx],
-            base_params=dict(LGB_BASE, random_state=cfg.SEED),
-            grids=grids,
-            budgets=tuple(cfg.ASHA_BUDGETS),
-            keep_frac=float(cfg.ASHA_KEEP_FRAC),
-            bucket_by_lr=bool(cfg.ASHA_BUCKET_BY_LR),
-            random_promote_frac=float(cfg.ASHA_RANDOM_PROMOTE_FRAC),
-            seed=int(cfg.SEED),
-        )
-        print(f"\n[ASHA] Best holdout R2: {best_score:.4f}")
-    else:
-        param_combinations = list(product(grid_lr, grid_sub, grid_ff, grid_min, grid_l2, grid_l1, grid_lea, grid_it))
-        with tqdm(total=total_combinations, desc="Grid search progress", ncols=100) as pbar:
-            for lr, subs, ff, mleaf, l2, l1, leaves, iters in param_combinations:
-                params = dict(LGB_BASE, learning_rate=lr, subsample=subs,
-                                feature_fraction=ff, min_data_in_leaf=mleaf,
-                                reg_lambda=l2, reg_alpha=l1, num_leaves=leaves,
-                                n_estimators=iters, random_state=cfg.SEED)
-                
-                mdl = lgb.LGBMRegressor(**params)
-                mdl.fit(X_tr_hold, y2.iloc[tr_idx],
-                        eval_set=[(X_ho_hold, y2.iloc[ho_idx])],
-                        callbacks=[lgb.early_stopping(100, verbose=False)])
-                
-                pred = mdl.predict(X_ho_hold)
-                score = r2_score(y2.iloc[ho_idx], pred)       
-                if score > best_score:
-                    best_score = score
-                    best_combo = params.copy()
-                    best_combo["n_estimators"] = int(getattr(mdl, "best_iteration_", params["n_estimators"]))
-                    pbar.set_postfix({'best_R2': f'{best_score:.4f}'})
-                pbar.update(1)
+    # Pack ARX/asinh/decay once
+    ar = arx_prepare(
+        y2, tr_idx=tr_idx, ho_idx=ho_idx, p=cfg.AR_P,
+        use_asinh=cfg.USE_ASINH, c_mult=cfg.ASINH_SCALE_MULT, use_time_decay=cfg.USE_TIME_DECAY, decay= cfg.DECAY_STRENGTH
+    )
 
-        print(f"\nBest holdout R^2 achieved: {best_score:.4f}")
+    param_combinations = list(product(grid_lr, grid_sub, grid_ff, grid_min, grid_l2, grid_l1, grid_lea, grid_it))
+    param_combinations = param_combinations[:cfg.MAX_GRID_COMBINATIONS]
+    since_best = 0
+
+
+    with tqdm(total=len(param_combinations), desc="Grid search progress", ncols=100) as pbar:
+        for lr, subs, ff, mleaf, l2, l1, leaves, iters in param_combinations:
+            params = dict(LGB_BASE, learning_rate=lr, subsample=subs,
+                            feature_fraction=ff, min_data_in_leaf=mleaf,
+                            reg_lambda=l2, reg_alpha=l1, num_leaves=leaves,
+                            n_estimators=iters, random_state=cfg.SEED)
+
+            score, best_it = lgb_holdout_resid_score(
+                params,
+                X_tr_hold, X_ho_hold,
+                ar['y_tr_t'], ar['y_ho_t'], ar['w_tr'],
+                ar['inv_hold'], ar['ar_in'].iloc[ho_idx].values,
+                y2.iloc[ho_idx].values,
+                early_rounds=60
+            )
+
+            if score > best_score + cfg.MIN_GAIN:
+                best_score = score
+                best_combo = params.copy()
+                best_combo["n_estimators"] = int(best_it)
+                best_history.append({
+                    "step": len(best_history) + 1,
+                    "r2": float(best_score),
+                    "params": {
+                        "learning_rate": float(best_combo["learning_rate"]),
+                        "subsample": float(best_combo["subsample"]),
+                        "feature_fraction": float(best_combo["feature_fraction"]),
+                        "min_data_in_leaf": int(best_combo["min_data_in_leaf"]),
+                        "reg_lambda": float(best_combo["reg_lambda"]),
+                        "reg_alpha": float(best_combo["reg_alpha"]),
+                        "num_leaves": int(best_combo["num_leaves"]),
+                        "n_estimators": int(best_combo["n_estimators"]),
+                    }
+                })
+                since_best = 0
+                pbar.set_postfix({'best_R2': f'{best_score:.4f}'})
+            else:
+                since_best += 1
+                if since_best >= cfg.EARLY_STOP_PATIENCE:
+                    print(f"[early-exit] No improvement > {cfg.MIN_GAIN:.4f} in {cfg.EARLY_STOP_PATIENCE} trials.")
+                    break
+
+            pbar.update(1)
+
+    print(f"\nBest holdout R^2 achieved: {best_score:.4f}")
 
     lgb_chosen = lgb.LGBMRegressor(**best_combo)
-    lgb_oof, _, lgb_rounds = _oof_predictions(lgb_chosen, X_y2_tr, y2, splits, is_lgb=True)
+    lgb_oof, lgb_rounds = oof_lgb_resid_level(
+        best_combo, X_y2_tr, y2, splits, ar['ar_in'],
+        use_asinh=cfg.USE_ASINH, c_scale=cfg.ASINH_SCALE_MULT,
+        use_time_decay=cfg.USE_TIME_DECAY, decay_strength=cfg.DECAY_STRENGTH,
+        early_rounds=60
+    )
     base_rounds = int(np.median(lgb_rounds)) if lgb_rounds else best_combo["n_estimators"]
-    final_rounds = min(max(300, int(base_rounds * 1.05)), 2000)
+    final_rounds = min(max(300, int(base_rounds * 1.05)), cfg.FINAL_ROUND_CAP)
 
+    
     from scipy.optimize import minimize_scalar
-    simple = minimize_scalar(lambda w: -r2_score(y2.values, w*lgb_oof + (1-w)*y2_ridge_oof),
-                             bounds=(0.0, 1.0), method='bounded')
-    simple_w = float(simple.x)
-    simple_r2 = r2_score(y2.values, simple_w*lgb_oof + (1-simple_w)*y2_ridge_oof)
+    # MAsk to rows where both OOF streams (and target) are finite
+    _mask_blend = _finite_mask(y2.values, lgb_oof, y2_ridge_oof)
+    _y2_m = y2.values[_mask_blend]
+    _lgb_m = np.asarray(lgb_oof, dtype=float)[_mask_blend]
+    _rid_m = np.asarray(y2_ridge_oof, dtype=float)[_mask_blend]
+
+    if _y2_m.size == 0:
+        # Fallback: if something went terribly wrong, default to ridge-only
+        simple_w = 0.0
+        simple_r2 = -1e9
+    else:
+        simple = minimize_scalar(lambda w: -r2_score(_y2_m, w*_lgb_m + (1-w)*_rid_m),
+                                bounds=(0.0, 1.0), method='bounded')
+        simple_w = float(simple.x)
+        simple_r2 = r2_score(_y2_m, simple_w*_lgb_m + (1-simple_w)*_rid_m)
 
     use_meta = False; meta_model = None; meta_r2 = -1e9
     if cfg.USE_META_LEARNING:
         from sklearn.linear_model import Ridge as Ridge2
-        X_meta = np.column_stack([lgb_oof, y2_ridge_oof, y1_oof, lgb_oof*y2_ridge_oof, lgb_oof*y1_oof])
-        meta_model = Ridge2(alpha=1.0).fit(X_meta, y2.values)
-        meta_pred = meta_model.predict(X_meta)
-        meta_r2 = r2_score(y2.values, meta_pred)
-        use_meta = meta_r2 > simple_r2
-    
+        # Build meta features and mask them to finite rows across all columns
+        _X_meta_full = np.column_stack([lgb_oof, y2_ridge_oof, y1_oof, 
+                                        np.asarray(lgb_oof)*np.asarray(y2_ridge_oof),
+                                        np.asarray(lgb_oof)*np.asarray(y1_oof)])
+        _mask_meta = _finite_mask(y2.values, _X_meta_full[:,0], _X_meta_full[:,1], _X_meta_full[:,2], _X_meta_full[:,3], _X_meta_full[:,4])
+        if _mask_meta.sum() > 0:
+            X_meta = _X_meta_full[_mask_meta]
+            y2_meta = y2.values[_mask_meta]
+            meta_model = Ridge2(alpha=1.0).fit(X_meta, y2_meta)
+            meta_pred = meta_model.predict(X_meta)
+            meta_r2 = r2_score(y2_meta, meta_pred)
+            use_meta = meta_r2 > simple_r2
+        else:
+            use_meta = False
     mean_r2 = float(max(meta_r2, simple_r2))
 
     return dict(
         MeanR2=mean_r2,
         Details=dict(
             best_params={k: (int(v) if isinstance(v, (np.integer,)) else v) for k, v in best_combo.items()},
+            best_history=best_history,
             final_rounds=int(final_rounds),
             simple_w=simple_w,
             used_meta=bool(use_meta),
+            lgb_holdout_score=float(best_score),
+            simple_ensemble_score=float(simple_r2),
+            meta_score=(float(meta_r2) if cfg.USE_META_LEARNING else None),
+            ridge_score=float(_score),
+            features_used=int(len(keep)),
+            total_features_created=int(X_y2_tr.shape[1]),
         ),
         CachedArtifacts=dict(
             X_y2_tr=X_y2_tr, X_y2_te=X_y2_te, keep_cols=keep,
             best_params=best_combo, final_rounds=final_rounds,
             y1_model=y1_model, y1_oof=y1_oof, y1_test_pred=y1_test_pred,
             y2_ridge=y2_ridge, y2_ridge_cols=y2_ridge_cols,
+            ar_coef=ar['coef'],
         )
     )
 
