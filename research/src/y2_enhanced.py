@@ -102,14 +102,14 @@ def holdout_split(n, holdout_frac=0.2):
 
 #ASHA_HELPER#
 def _asha_search(
-        X_tr, y_tr, X_ho, y_ho,
-        base_params: dict,
-        grids: dict,
-        budgets=(900, 2000, 3500),
-        keep_frac: float = 1/3,
-        bucket_by_lr: bool = True,
-        random_promote_frac: float = 0.05,
-        seed: int = 42,
+    X_tr, y_tr, X_ho, y_ho,
+    base_params: dict,
+    grids: dict,
+    budgets=(900, 2000, 3500),
+    keep_frac: float = 1/3,
+    bucket_by_lr: bool = True,
+    random_promote_frac: float = 0.05,
+    seed: int = 42,
 ):
 
     rng = random.Random(seed)
@@ -144,38 +144,39 @@ def _asha_search(
                 arr.sort(key=lambda t: t[0], reverse=True)
                 k = max(1, int(len(arr) * kfrac))
                 promoted.extend(p for _, p in arr[:k])
-            else:
-                k = max(1, int(len(scores) * kfrac))
-                promoted.extend(p for _, p in scores[:k])
-            if random_frac > 0.0 and scores is rung0_scores:
-                n_extra = max(0, int(len(scores) *random_frac))
-                tail = [p for _, p in scores[max(0, len(scores)//2):]]
-                rng.shuffle(tail)
-                for p in tail:
-                    if p not in promoted and len(promoted) < k + n_extra:
-                        promoted.append(p)
-            return promoted
+        else:
+            k = max(1, int(len(scores) * kfrac))
+            promoted.extend(p for _, p in scores[:k])
+        if random_frac > 0.0 and scores is rung0_scores:
+            n_extra = max(0, int(len(scores) * random_frac))
+            tail = [p for _, p in scores[max(0, len(scores)//2):]]
+            rng.shuffle(tail)
+
+            for p in tail:
+                if p not in promoted and len(promoted) < k + n_extra:
+                    promoted.append(p)
+        return promoted
         
-        cur = promote(rung0_scores, keep_frac, by_lr=bucket_by_lr, random_frac=random_promote_frac)
+    cur = promote(rung0_scores, keep_frac, by_lr=bucket_by_lr, random_frac=random_promote_frac)
 
-        for r_idx, B in enumerate(budgets[1:], start=2):
-            nxt_scores = []
-            desc = f"ASHA rung {r_idx}/{len(budgets)} (T={B})"
-            with tqdm(total=len(cur), desc=desc, ncols=100) as pbar:
-                for p in cur:
-                    p2 = dict(p)
-                    p2["n_estimators"] = Bmdl = lgb.LGBMRegressor(**p)
-                    mdl.fit(X_tr, y_tr, eval_set=[(X_ho, y_ho)], callbacks=[lgb.early_stopping(90, verbose=False)])
-                    pred = mdl.predict(X_ho)
-                    score = r2_score(y_ho, pred)
-                    nxt_scores.append({score, p2})
-                    pbar.set_postfix({'best_R2': f'{max(nxt_scores, key=lambda t: t[0])[0]:.4f}'})
-                    pbar.update(1)
-            cur = promote(nxt_scores, keep_frac, by_lr=bucket_by_lr, random_frac=0.0)
+    for r_idx, B in enumerate(budgets[1:], start=2):
+        nxt_scores = []
+        desc = f"ASHA rung {r_idx}/{len(budgets)} (T={B})"
+        with tqdm(total=len(cur), desc=desc, ncols=100) as pbar:
+            for p in cur:
+                p2 = dict(p)
+                p2["n_estimators"] = Bmdl = lgb.LGBMRegressor(**p)
+                mdl.fit(X_tr, y_tr, eval_set=[(X_ho, y_ho)], callbacks=[lgb.early_stopping(90, verbose=False)])
+                pred = mdl.predict(X_ho)
+                score = r2_score(y_ho, pred)
+                nxt_scores.append({score, p2})
+                pbar.set_postfix({'best_R2': f'{max(nxt_scores, key=lambda t: t[0])[0]:.4f}'})
+                pbar.update(1)
+        cur = promote(nxt_scores, keep_frac, by_lr=bucket_by_lr, random_frac=0.0)
 
-        final_best = max(nxt_scores if budgets[-1] != budgets[0] else rung0_scores, key=lambda t: t[0])
-        best_score, best_params = final_best[0], final_best[1]
-        return best_params, float(best_score)
+    final_best = max(nxt_scores if budgets[-1] != budgets[0] else rung0_scores, key=lambda t: t[0])
+    best_score, best_params = final_best[0], final_best[1]
+    return best_params, float(best_score)
 
 def evaluate_y2_enhanced_cv(train_df, test_df, y1, y2, cfg: EnhancedConfig):
     n = len(train_df)
@@ -237,7 +238,7 @@ def evaluate_y2_enhanced_cv(train_df, test_df, y1, y2, cfg: EnhancedConfig):
     grid_l2 = [45.0, 60.0] if cfg.SPEED_MODE else [30.0, 45.0, 60.0]
     grid_l1 = [0.5] if cfg.SPEED_MODE else [0.5, 1.0]
     grid_lea = [15] if cfg.SPEED_MODE else [15, 31]
-    grid_it = [2500, 3000] if cfg.SPEED_MODE else [3000, 4000, 5000]
+    grid_it = [2500, 3500] if cfg.SPEED_MODE else [3000, 4000, 5000]
 
     total_combinations = len(grid_lr) * len(grid_sub) * len(grid_ff) * len(grid_min) * len(grid_l2) * len(grid_l1) * len(grid_lea) * len(grid_it)
 
@@ -255,7 +256,7 @@ def evaluate_y2_enhanced_cv(train_df, test_df, y1, y2, cfg: EnhancedConfig):
             base_params=dict(LGB_BASE, random_state=cfg.SEED),
             grids=grids,
             budgets=tuple(cfg.ASHA_BUDGETS),
-            keep_fract=float(cfg.ASHA_KEEP_FRAC),
+            keep_frac=float(cfg.ASHA_KEEP_FRAC),
             bucket_by_lr=bool(cfg.ASHA_BUCKET_BY_LR),
             random_promote_frac=float(cfg.ASHA_RANDOM_PROMOTE_FRAC),
             seed=int(cfg.SEED),
