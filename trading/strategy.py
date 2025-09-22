@@ -5,7 +5,11 @@ Algorithmic strategy template
 """
 
 from enum import Enum
-from typing import Optional
+from typing import Optional, List, Dict
+
+from scraper import GameScraper
+import math
+import time
 
 class Side(Enum):
     BUY = 0
@@ -71,6 +75,8 @@ def cancel_order(ticker: Ticker, order_id: int) -> bool:
 
 class Strategy:
     """Template for a strategy."""
+    def _make_out_path(self) -> str:
+        return f"game_debug_{self._game_index:03d}.json"
 
     def reset_state(self) -> None:
         """Reset the state of the strategy to the start of game position.
@@ -81,10 +87,23 @@ class Strategy:
         Note: In production execution, the game will start from the beginning
         and will not be replayed.
         """
+        if not hasattr(self, "_game_index"):
+            self._game_index = 1
+        
+        if not hasattr(self, "scraper"):
+            self.scraper = GameScraper(self._make_out_path())
+        self.scraper.start_new_game(self._make_out_path())
+
+        self.home_score = 0
+        self.away_score = 0
+        self._last_time_seconds = None
+
         pass
 
     def __init__(self) -> None:
         """Your initialization code goes here."""
+        self._game_index = 1
+        self.scraper = GameScraper(self._make_out_path())
         self.reset_state()
 
     def on_trade_update(
@@ -103,6 +122,10 @@ class Strategy:
             Price that trade was executed at
         """
         print(f"Python Trade update: {ticker} {side} {quantity} shares @ {price}")
+        # Log via scraper
+        self.scraper.record_generic(
+            event_type=f"TRADE_UPDATE {ticker.name} {side.name} q={quantity} p={price}"
+        )
 
     def on_orderbook_update(
         self, ticker: Ticker, side: Side, quantity: float, price: float
@@ -119,6 +142,10 @@ class Strategy:
         quantity
             Volume placed into orderbook
         """
+        # Log orderbook changes
+        self.scraper.record_generic(
+            event_type=f"ORDERBOOK_UPDATE {ticker.name} {side.name} q={quantity} p={price}"
+        )
         pass
 
     def on_account_update(
@@ -143,6 +170,16 @@ class Strategy:
         capital_remaining
             Amount of capital after fulfilling order
         """
+        # Log fills
+        self.scraper.record_generic(
+            event_type=(
+                f"ACCOUNT_UPDATE {ticker.name} {side.name}"
+                f"fill_q={quantity} fill_p={price} cap={capital_remaining}"
+            )
+        ),
+        price=price
+        capital_remaining=capital_remaining
+
         pass
 
     def on_game_event_update(self,
@@ -188,8 +225,30 @@ class Strategy:
 
         print(f"{event_type} {home_score} - {away_score}")
 
+        # Update local state
+        self._home_score = home_score
+        self._away_score = away_score
+        self._last_time_seconds = time_seconds
+
+        # Record event
+        self.scraper.record_game_event(
+            home_away=home_away if home_away is not None else "unknown",
+            home_score=home_score,
+            event_type=event_type,
+            player_name=player_name,
+            substituted_player_name=substituted_player_name,
+            shot_type=shot_type,
+            assist_player=assist_player,
+            rebound_type=rebound_type,
+            coordinate_x=coordinate_x,
+            coordinate_y=coordinate_y,
+            time_seconds=time_seconds,
+        )
+
         if event_type == "END_GAME":
             # IMPORTANT: Highly recommended to call reset_state() when the
             # game ends. See reset_state() for more details.
+            self.scraper.finalize()
+            self._game_index += 1
             self.reset_state()
             return

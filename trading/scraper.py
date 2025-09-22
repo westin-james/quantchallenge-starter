@@ -16,6 +16,8 @@ _ALLOWED_KEYS = [
     "coordinate_x",
     "coordinate_y",
     "time_seconds",
+    "price",
+    "float"
 ]
 
 class GameScraper:
@@ -26,6 +28,9 @@ class GameScraper:
         self._last_home_score: Optional[int] = 0
         self._last_away_score: Optional[int] = 0
         self._last_time_seconds: Optional[float] = None
+        # Track latest market state
+        self._last_price: Optional[float] = None
+        self._last_float: Optional[float] = None
     
     def start_new_game(self, out_path: Optional[str] = None) -> None:
         self.events = []
@@ -45,6 +50,10 @@ class GameScraper:
             self._last_away_score = normalized["away_score"]
         if normalized["time_seconds"] is not None:
             self._last_time_seconds = normalized["time_seconds"]
+        if normalized["price"] is not None:
+            self._last_price = normalized["price"]
+        if normalized["float"] is not None:
+            self._last_float = normalized["float"]
             
     def record_game_event(
         self,
@@ -76,10 +85,19 @@ class GameScraper:
                 "coordinate_x": coordinate_x,
                 "coordinate_y": coordinate_y,
                 "time_seconds": float(time_seconds) if time_seconds is not None else None,
+                "price": self._last_price,
+                "float": self._last_float,
             }
         )
 
-    def record_generic(self, *, event_type: str, home_away: Optional[str] = "unknown") -> None:
+    def record_generic(
+            self, 
+            *, 
+            event_type: str, 
+            home_away: Optional[str] = "unknown",
+            price: Optional[float] = None,
+            capital_remaining: Optional[float] = None,
+    ) -> None:
         self._append(
             {
                 "home_away": home_away if home_away is not None else "unknown",
@@ -94,6 +112,8 @@ class GameScraper:
                 "coordinate_x": None,
                 "coordinate_y": None,
                 "time_seconds": self._last_time_seconds,
+                "price": price,
+                "float": capital_remaining,
             }
         )
 
