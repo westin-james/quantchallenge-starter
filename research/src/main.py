@@ -29,7 +29,7 @@ def y1_advanced_eval_adapter(target_key, X, y_by_target, ctx):
 def main():
 
     ######################## 1. LOADING DATA ########################
-    print("\n ####################### 1. LOADING DATA ########################################\n")
+    print("\n######################## 1. LOADING DATA ########################################\n")
     train_df, test_df, feature_cols = load_train_test()
     X_train, y_by_target, X_test = build_matrices(train_df, test_df, feature_cols)
 
