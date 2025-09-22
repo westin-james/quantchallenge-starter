@@ -7,7 +7,7 @@ Algorithmic strategy template
 import json
 from pathlib import Path
 from enum import Enum
-from typing import Optional, Dict, Any
+from typing import Optional, List, Dict, Any
 
 # ------------------------ SCRAPER ------------------------ #
 
@@ -25,7 +25,7 @@ _ALLOWED_KEYS = [
     "coordinate_y",
     "time_seconds",
     "price",
-    "float"
+    "float",
 ]
 
 class GameScraper:
@@ -41,7 +41,7 @@ class GameScraper:
         self._last_float: Optional[float] = None
     
     def start_new_game(self, out_path: Optional[str] = None) -> None:
-        self.events = []
+        self.events: List[Dict[str, Any]] = []
         if out_path is not None:
             self.out_path = Path(out_path)
         self._last_home_score = 0
@@ -62,7 +62,7 @@ class GameScraper:
             self._last_price = normalized["price"]
         if normalized["float"] is not None:
             self._last_float = normalized["float"]
-            
+
     def record_game_event(
         self,
         *,
@@ -99,12 +99,12 @@ class GameScraper:
         )
 
     def record_generic(
-            self, 
-            *, 
-            event_type: str, 
-            home_away: Optional[str] = "unknown",
-            price: Optional[float] = None,
-            capital_remaining: Optional[float] = None,
+        self,
+        *,
+        event_type: str,
+        home_away: Optional[str] = "unknown",
+        price: Optional[float] = None,
+        capital_remaining: Optional[float] = None,
     ) -> None:
         self._append(
             {
@@ -193,7 +193,7 @@ def cancel_order(ticker: Ticker, order_id: int) -> bool:
     success
         True if order was cancelled, False otherwise
     """
-    return 0
+    return False
 
 # ------------------------ STRATEGY ------------------------ #
 
@@ -219,7 +219,7 @@ class Strategy:
         
         self.scraper.start_new_game(self._make_out_path())
 
-        self.home_score: int =0
+        self.home_score: int = 0
         self.away_score: int = 0
         self._last_time_seconds: Optional[float] = None
 
@@ -249,7 +249,8 @@ class Strategy:
         print(f"Python Trade update: {ticker} {side} {quantity} shares @ {price}")
         # Log via scraper
         self.scraper.record_generic(
-            event_type=f"TRADE_UPDATE {ticker.name} {side.name} q={quantity} p={price}", price=price,
+            event_type=f"TRADE_UPDATE {ticker.name} {side.name} q={quantity} p={price}",
+            price=price,
         )
 
     def on_orderbook_update(
@@ -269,7 +270,8 @@ class Strategy:
         """
         # Log orderbook changes
         self.scraper.record_generic(
-            event_type=f"ORDERBOOK_UPDATE {ticker.name} {side.name} q={quantity} p={price}", price=price,
+            event_type=f"ORDERBOOK_UPDATE {ticker.name} {side.name} q={quantity} p={price}",
+            price=price,
         )
 
     def on_account_update(
@@ -304,19 +306,20 @@ class Strategy:
             capital_remaining=capital_remaining,
         )
 
-    def on_game_event_update(self,
-                           event_type: str,
-                           home_away: str,
-                           home_score: int,
-                           away_score: int,
-                           player_name: Optional[str],
-                           substituted_player_name: Optional[str],
-                           shot_type: Optional[str],
-                           assist_player: Optional[str],
-                           rebound_type: Optional[str],
-                           coordinate_x: Optional[float],
-                           coordinate_y: Optional[float],
-                           time_seconds: Optional[float]
+    def on_game_event_update(
+            self,
+            event_type: str,
+            home_away: str,
+            home_score: int,
+            away_score: int,
+            player_name: Optional[str],
+            substituted_player_name: Optional[str],
+            shot_type: Optional[str],
+            assist_player: Optional[str],
+            rebound_type: Optional[str],
+            coordinate_x: Optional[float],
+            coordinate_y: Optional[float],
+            time_seconds: Optional[float],
         ) -> None:
         """Called whenever a basketball game event occurs.
         Parameters
@@ -348,8 +351,8 @@ class Strategy:
         print(f"{event_type} {home_score} - {away_score}")
 
         # Update local state
-        self._home_score = home_score
-        self._away_score = away_score
+        self.home_score = home_score
+        self.away_score = away_score
         self._last_time_seconds = time_seconds
 
         # Record event
