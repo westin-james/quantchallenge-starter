@@ -82,8 +82,11 @@ def main():
         print(f"  - {key}: {path}")
 
     print("\nANALYSIS COMPLETE")
-    best_combined = float(summary['Combined'].iloc[0])
-    print(f"Best combined performance: {best_combined:.4f}")
+    best_selected_combined = 0.5 * (
+          cv_long.loc[(cv_long.Target == "Y1") & (cv_long.ModelKey == selections["Y1"]), "MeanR2"].iloc[0]
+        + cv_long.loc[(cv_long.Target == "Y2") & (cv_long.ModelKey == selections["Y2"]), "MeanR2"].iloc[0]
+    )
+    print(f"Best combined performance: {best_selected_combined:.4f}")
 
     run_dir = Path(res.run_dir)
     table_txt = summary[["ModelKey","Model","Y1","Y2","Combined"]].to_string(index=False)
@@ -91,7 +94,7 @@ def main():
         table_txt,
         "",
         "ANALYSIS COMPLETE",
-        f"Best combined performance: {best_combined:.4}",
+        f"Best combined performance: {best_selected_combined:.4}",
     ])
     (run_dir / "cv_summary.txt").write_text(out_txt)
     print(f"Wrote CV summary text to: {(run_dir / 'cv_summary.txt').as_posix()}")

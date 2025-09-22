@@ -203,7 +203,31 @@ def plot_y2_blend_info(y2_enhanced_fitted) -> plt.Figure:
     plt.tight_layout()
     return fig
 
-def _short_params_label(p: Dict[str, Any]) -> 
+def _short_params_label(p: Dict[str, Any]) -> str:
+    return (f"lr={p['learning_rate']}, subs={p['subsample']}, ff={p['feature_fraction']}, "
+            f"leaf={p['min_data_in_leaf']}, L2={p['reg_lambda']}, L1={p['reg_alpha']}, "
+            f"leaves={p['num_leaves']}, it={p['n_estimators']}")
+
+def plot_y2_enhanced_progress(best_history: List[Dict[str, Any]]) -> Optional[plt.Figure]:
+    if not best_history:
+        return None
+    steps = [h["step"] for h in best_history]
+    r2s = [h["r2"] for h in best_history]
+    labs = [_short_params_label(h["params"]) for h in best_history]
+
+    fig_w = max(10, int(1.2 * len(steps)))
+    fig, ax = plt.subplots(figsize=(fig_w, 5))
+    ax.plot(steps, r2s, marker="o")
+    ax.set_xlabel("New-best timesteps")
+    ax.set_ylabel("Best R2 on holdout")
+    ax.set_title("Y2 Enhanced - Best R2 over Parameter Search", fontsize=14, fontweight="bold")
+    ax.grid(True, alpha=0.3)
+    ax.set_xticks(steps)
+    ax.set_xticklabels(labs, rotation=45, ha="right")
+    ax.annotate(f"Final best: {r2s[-1]:.4f}", xy=(steps[-1], r2s[-1]),
+                xytest=(5,10), textcoords="offset points")
+    plt.tight_layout()
+    return fig
 
 @dataclass(frozen=True)
 class SaveResult:
@@ -255,6 +279,17 @@ def save_all_plots(
                 saved["y2_lgb_importance"] = _save(fig, run_dir, "P6-y2_lgb_importance.png")
             fig = plot_y2_blend_info(y2_model)
             saved["y2_blend"] = _save(fig, run_dir, "P7-y2_blend.png")
+        try:
+            row = (cv_long_df[(cv_long_df["ModelKey"] == "lgb_y2_enhanced") &
+                                (cv_long_df["Target"] == "Y2")].iloc[0])
+            details = row["CustomDetails"]
+            if isinstance(details, dict):
+                hist = (details.get("Details") or {}).get("best_history", [])
+                fig2 = plot_y2_enhanced_progress(hist)
+                if fig2 is not None:
+                    saved["y2_enhanced_progress"] = _save(fig2, run_dir, "P8-y2_enhanved_progress.png")
+        except Exception:
+            pass
     except Exception:
         pass
 
