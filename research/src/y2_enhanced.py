@@ -7,6 +7,8 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.linear_model import Ridge, ElasticNet
 from sklearn.metrics import r2_score
 from sklearn.impute import SimpleImputer
+from tqdm import tqdm
+from itertools import product
 
 from src.feature_eng import make_enhanced_y2_features, Y2TinyInteractions
 from src.config import RANDOM_STATE
@@ -151,29 +153,40 @@ def evaluate_y2_enhanced_cv(train_df, test_df, y1, y2, cfg: EnhancedConfig):
     grid_lea = [15] if cfg.SPEED_MODE else [15, 31]
     grid_it = [2500] if cfg.SPEED_MODE else [3000, 4000, 5000]
 
+    total_combinations = len(grid_lr) * len(grid_sub) * len(grid_ff) * len(grid_min) * len(grid_l2) * len(grid_l1) * len(grid_lea) * len(grid_it)
+
+    print(f"\nGrid search mode: {'FAST' if cfg.SPEED_MODE else 'FULL'}")
+    print(f"Total parameter combinations to test: {total_combinations}")
+
     X_tr_hold = X_y2_tr.iloc[tr_idx]; X_ho_hold = X_y2_tr.iloc[ho_idx]
     best_score, best_combo = -1e9, None
-    for lr in grid_lr:
-        for subs in grid_sub:
-            for ff in grid_ff:
-                for mleaf in grid_min:
-                    for l2 in grid_l2:
-                        for l1 in grid_l1:
-                            for leaves in grid_lea:
-                                for iters in grid_it:
-                                    params = dict(LGB_BASE, learning_rate=lr, subsample=subs,
-                                                  feature_fraction=ff, min_data_in_leaf=mleaf,
-                                                  reg_lambda=l2, reg_alpha=l1, num_leaves=leaves,
-                                                  n_estimators=iters, random_state=cfg.SEED)
-                                    mdl = lgb.LGBMRegressor(**params)
-                                    mdl.fit(X_tr_hold, y2.iloc[tr_idx],
-                                            eval_set=[(X_ho_hold, y2.iloc[ho_idx])],
-                                            callbacks=[lgb.early_stopping(100, verbose=False)])
-                                    pred = mdl.predict(X_ho_hold)
-                                    score = r2_score(y2.iloc[ho_idx], pred)
-                                    if score > best_score:
-                                        best_score = score; best_combo = params.copy()
-                                        best_combo["n_estimators"] = int(getattr(mdl, "best_iteration_", params["n_estimators"]))
+
+    param_combinations = list(product(grid_lr, grid_sub, grid_ff, grid_min, grid_l2, grid_l1, grid_lea, grid_it))
+    
+    with tqdm(total=total_combinations, desc="Grid search progress", ncols=100) as pbar:
+        for lr, subs, ff, mleaf, l2, l1, leaves, iters in param_combinations:
+            params = dict(LGB_BASE, learning_rate=lr, subsample=subs,
+                            feature_fraction=ff, min_data_in_leaf=mleaf,
+                            reg_lambda=l2, reg_alpha=l1, num_leaves=leaves,
+                            n_estimators=iters, random_state=cfg.SEED)
+            
+            mdl = lgb.LGBMRegressor(**params)
+            mdl.fit(X_tr_hold, y2.iloc[tr_idx],
+                     eval_set=[(X_ho_hold, y2.iloc[ho_idx])],
+                    callbacks=[lgb.early_stopping(100, verbose=False)])
+            
+            pred = mdl.predict(X_ho_hold)
+            score = r2_score(y2.iloc[ho_idx], pred)
+                                    
+            if score > best_score:
+                best_score = score
+                best_combo = params.copy()
+                best_combo["n_estimators"] = int(getattr(mdl, "best_iteration_", params["n_estimators"]))
+                pbar.set_postfix({'best_R2': f'{best_score:.4f}'})
+
+            pbar.update(1)
+
+    print(f"\nBest holdout R^2 achieved: '{best_score:.4f}")
 
     lgb_chosen = lgb.LGBMRegressor(**best_combo)
     lgb_oof, _, lgb_rounds = _oof_predictions(lgb_chosen, X_y2_tr, y2, splits, is_lgb=True)
