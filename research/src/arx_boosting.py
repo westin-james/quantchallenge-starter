@@ -61,7 +61,7 @@ def oof_lgb_resid_level(params: dict, X: pd.DataFrame, y_level: pd.Series,
     rounds = []
     for tr_idx, va_idx in splits:
         resid = (y_level - ar_in)
-        y_tr_raw = resid.iloc[tr_idx]; y_va_raw = resid.iloc[va_idx]
+        y_tr_raw, y_va_raw = resid.iloc[tr_idx]; y_va_raw = resid.iloc[va_idx]
         Xtr, Xva = X.iloc[tr_idx], X.iloc[va_idx]
 
         tr_mask = np.isfinite(y_tr_raw.values)
@@ -85,6 +85,7 @@ def oof_lgb_resid_level(params: dict, X: pd.DataFrame, y_level: pd.Series,
                 eval_set=[(Xva2, y_va_t)],
                 callbacks=[lgb.early_stopping(early_rounds, verbose=False)])
         pred_t = mdl.predict(Xva2)
+        lvl_pred = ar_in.iloc[va_idx].values.copy()
         lvl_pred = inv(pred_t) + ar_in.iloc[va_idx].values[va_mask]
         oof_level[va_idx] = lvl_pred
         rounds.append(int(getattr(mdl, "best_iteration_", params.get("n_estimators", 800))))
@@ -94,7 +95,7 @@ def decorrelate_after_topk(X: pd.DataFrame, keep_list, thresh=0.95, sample_rows=
     keep_list = list(keep_list)
     Xs = X[keep_list]
     if len(Xs) > sample_rows:
-        idx = np.linspace(0, len(Xs) -1, sample_rows).astype(int)
+        idx = np.linspace(0, len(Xs) - 1, sample_rows).astype(int)
         Xs = Xs.iloc[idx]
     selected = []
     for f in keep_list:
