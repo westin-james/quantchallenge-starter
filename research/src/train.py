@@ -7,6 +7,7 @@ from .config import RANDOM_STATE
 from .y2_enhanced import (
     EnhancedConfig, evaluate_y2_enhanced_cv, Y2EnhancedFitted
 )
+from .y1_advanced_v11 import Y1AdvancedFitted, evaluate_y1_advanced_cv
 
 def train_best_models(X, y_by_target: Dict[str, pd.Series], selections: Dict[str, str], ctx: dict):
     """
@@ -79,6 +80,17 @@ def train_best_models(X, y_by_target: Dict[str, pd.Series], selections: Dict[str
                 X_lgb_test=art["X_y2_te"],
                 ridge_feats=ridge_cols,
             )
+        elif mkey == "y1_advanced_v11":
+            if tgt != "Y1":
+                pipe = make_pipeline("ridge", tgt)
+                pipe.fit(X, y_by_target[tgt])
+                fitted[tgt] = pipe
+                continue
+            res = evaluate_y1_advanced_cv(train_df, test_df)
+            art = res["CachedArtifacts"]
+            spec = art["spec"]
+            feats = art["selected_feats"]
+            fitted["Y1"] = Y1AdvancedFitted(train_df=train_df, spec=spec, selected_feats=feats)
         else:
             pipe = make_pipeline(mkey, tgt)
             pipe.fit(X, y_by_target[tgt])
