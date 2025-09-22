@@ -43,13 +43,13 @@ def add_lag_features(df: pd.DataFrame, target_col="Y1", lags=LAG_FEATURES) -> pd
         out[col] = out[col].bfill().fillna(0.0)
     return out
 
-def add_rolling_features(df: pd.DataFrame, cols=ROLLING_FEATURES, winodw=ROLLING_WINDOWS) -> pd.DataFrame:
+def add_rolling_features(df: pd.DataFrame, cols=ROLLING_FEATURES, windows=ROLLING_WINDOWS) -> pd.DataFrame:
     out = df.copy()
     for col in cols:
         if col in out.columns:
             for w in windows:
                 out[f"{col}_roll_mean_{w}"] = out[col].rolling(w, min_periods=1).mean()
-                out[f"{col}_roll_std_{w}"] = out[col].rolling(w, min_periods=1).std()
+                out[f"{col}_roll_std_{w}"] = out[col].rolling(w, min_periods=1).std().fillna(0.0)
     return out
 
 def add_g_interactions(df: pd.DataFrame, base_col="G") -> pd.DataFrame:
@@ -58,7 +58,7 @@ def add_g_interactions(df: pd.DataFrame, base_col="G") -> pd.DataFrame:
     out = df.copy()
     for col in ["J","H","C","M","E"]:
         if col in out.columns:
-            out[f"{base_col}x{col}"] = out[base_col] * out[base_col] * out[col]
+            out[f"{base_col}x{col}"] = out[base_col] * out[col]
     out[f"{base_col}_squared"] = out[base_col] ** 2
     return out
 
@@ -91,7 +91,7 @@ def holdout_split(n, frac=HOLDOUT_FRAC):
     cut = int(np.floor(n*(1-frac)))
     return np.arange(cut), np.arange(cut, n)
 
-def r2(y, p)
+def r2(y, p):
     return float(r2_score(y, p))
 
 def recency_weights(n, lam=2.0):
@@ -103,14 +103,14 @@ def recency_weights(n, lam=2.0):
 def numeric_df(df: pd.DataFrame, cols: List[str]) -> pd.DataFrame:
     X = df[cols].copy()
     for c in cols:
-        if not pd.api.types.is_numerica_dtype(X[c]):
+        if not pd.api.types.is_numeric_dtype(X[c]):
             X[c] = pd.to_numeric(X[c], errors="coerce")
     return X.fillna(0.0)
 
 def both_present(train_df: pd.DataFrame, test_df: pd.DataFrame, col: str) -> bool:
     return (col in train_df.columns) and (col in test_df.columns)
 
-def build_y1_candidate_list(train_df: pd.DataFrame, test_df: pd.DataFrame) -> List[str]
+def build_y1_candidate_list(train_df: pd.DataFrame, test_df: pd.DataFrame) -> List[str]:
     drop = {"time","id","Y1","Y2"}
     common = [c for c in train_df.columns if c in test_df.columns and c not in drop]
     core_first = [c for c in CORE if c in common]
@@ -119,7 +119,7 @@ def build_y1_candidate_list(train_df: pd.DataFrame, test_df: pd.DataFrame) -> Li
     time_bases = [c for c in common if c.startswith("sin_") or c.startswith("cos_")]
     lag_feats = [c for c in common if "_lag" in c]
     other_extras = [c for c in common if c not in core_first and c not in interactions
-                    and c not in ROLLING_FEATURES and c not in time_bases and c not in lag_feats]
+                    and c not in rolling_feats and c not in time_bases and c not in lag_feats]
     return core_first + interactions + lag_feats + rolling_feats + other_extras + time_bases if (other_extras:=other_extras) is not None else core_first + interactions + lag_feats + rolling_feats + time_bases
 
 def preselect_features(train: pd.DataFrame, test: pd.DataFrame, candidate_feats: List[str], idx_tr, max_feats=MAX_Y1_FEATS):
@@ -127,15 +127,15 @@ def preselect_features(train: pd.DataFrame, test: pd.DataFrame, candidate_feats:
     Xcand = numeric_df(train, candidate_feats).iloc[idx_tr]
     corrs = {}
     for c in candidate_feats:
-        x = Xcand[c].to_numpy
+        x = Xcand[c].to_numpy()
         if np.std(x) < 1e-12:
             corrs[c] = 0.0
         else:
             cx = np.corrcoef(x, y)[0,1]
-            corrs[c] = 0.0 if not np.isfinite(cx) else abs(x)
+            corrs[c] = 0.0 if not np.isfinite(cx) else abs(cx)
         
     core_present = [c for c in CORE if c in candidate_feats]
-    interactions = [c for c in candidate_feats if "x" in x or "_squared" in c]
+    interactions = [c for c in candidate_feats if "x" in c or "_squared" in c]
     lag_feats = [c for c in candidate_feats if "_lag" in c]
     other_extras = [c for c in candidate_feats if c not in core_present
                     and c not in interactions and c not in lag_feats]
@@ -166,7 +166,7 @@ def preselect_features(train: pd.DataFrame, test: pd.DataFrame, candidate_feats:
     if len(keep) > max_feats:
         protected = set(CORE) | set(available_pins) | set(interactions_sorted[:3]) | set(lag_feats_sorted[:2])
         removable = [c for c in keep if c not in protected]
-        removable_sorted = sorted(removable, key=lambda c:corrs:get(c,0.0))
+        removable_sorted = sorted(removable, key=lambda c: corrs:get(c,0.0))
         to_remove = len(keep) - max_feats
         for c in removable_sorted[:to_remove]:
             keep.remove(c)
@@ -198,7 +198,7 @@ def adaptive_two_window_ridge(train, test, idx_tr, idx_ho, feats,
         scL = RobustScaler().fit(X.iloc[late_abs])
         Xe = scE.transform(X.iloc[early_abs]).astype(np.float32)
         Xl = scL.transform(X.iloc[late_abs]).astype(np.float32)
-        y1 = y.iloc[early_abs].to_numpy()
+        ye = y.iloc[early_abs].to_numpy()
         yl = y.iloc[late_abs].to_numpy()
 
         boundary_time = train["time"].iloc[idx_tr[cut_idx]]
@@ -209,12 +209,12 @@ def adaptive_two_window_ridge(train, test, idx_tr, idx_ho, feats,
             for aL in alphas:
                 for lam in late_lams:
                     sw = recency_weights(len(late_abs), lam)
-                    mL = Ridge(alpha=aL).fit(X1, y1, sample_weight=sw)
-                    p = p.empty(len(idx_ho), dtype=np.float32)
+                    mL = Ridge(alpha=aL).fit(Xl, yl, sample_weight=sw)
+                    p = np.empty(len(idx_ho), dtype=np.float32)
                     if (~is_late).sum()>0:
-                        p(~is_late)=mE.predict(scE.transform(X.iloc[idx_ho[~is_late]]))
+                        p[~is_late]=mE.predict(scE.transform(X.iloc[idx_ho[~is_late]]))
                     if (is_late).sim()>0:
-                        p(is_late)=mL.predict(scL.transform(X.iloc[idx_ho[is_late]]))
+                        p[is_late]=mL.predict(scL.transform(X.iloc[idx_ho[is_late]]))
                     score = r2(y.iloc[idx_ho], p)
                     if (best is None) or (score > best[0]):
                         best = (score, cut, aE, aL, lam)
@@ -222,12 +222,13 @@ def adaptive_two_window_ridge(train, test, idx_tr, idx_ho, feats,
     if best is None:
         return None
     
-    score, cut, aE, aL, lam = bestname = f"AdaptiveTwoWindowCut{cut:.3f}_aE{aE}_aL{aL}_lam{lam}"
+    score, cut, aE, aL, lam = best
+    name = f"AdaptiveTwoWindowCut{cut:.3f}_aE{aE}_aL{aL}_lam{lam}"
 
     cut_idx = int(np.floor(len(idx_tr)*cut))
     cut_idx = max(1, min(cut_idx, len(idx_tr)-1))
     early_abs = idx_tr[:cut_idx]
-    labe_abs = idx_tr[cut_idx:]
+    late_abs = idx_tr[cut_idx:]
 
     scE = RobustScaler().fit(X.iloc[early_abs])
     scL = RobustScaler().fit(X.iloc[late_abs])
@@ -238,9 +239,9 @@ def adaptive_two_window_ridge(train, test, idx_tr, idx_ho, feats,
     boundary_time = train["time"].iloc[idx_tr[cut_idx]]
     is_late = (train["time"].iloc[idx_ho].to_numpy() >= boundary_time)
     if (~is_late).sum()>0:
-        p(~is_late)=mE.predict(scE.transform(X.iloc[idx_ho[~is_late]]))
+        p[~is_late]=mE.predict(scE.transform(X.iloc[idx_ho[~is_late]]))
     if (is_late).sim()>0:
-        p(is_late)=mL.predict(scL.transform(X.iloc[idx_ho[is_late]]))
+        p[is_late]=mL.predict(scL.transform(X.iloc[idx_ho[is_late]]))
 
         return dict(name=name, hold=r2(y.iloc[idx_ho], p), std=0.008, y_ho=p,
                     builder=("adaptive_two_window", cut, aE, aL, lam, feats))
@@ -253,19 +254,19 @@ def huber_ensemble(train, idx_tr, idx_ho, feats, epsilons=[1.2, 1.5, 2.0], alpha
 
     predictions, scores = [], []
     for eps in epsilons:
-        m = HuberRegressor(epsilon=eps, alpha=alpha, mat_iter=3000)
+        m = HuberRegressor(epsilon=eps, alpha=alpha, max_iter=3000)
         m.fit(Xs[idx_tr], y.iloc[idx_tr])
         p = m.predict(Xs[idx_ho])
         s = r2(y.iloc[idx_ho], p)
         predictions.append(p); scores.append(s)
 
     w = np.array(scores); w = w / (w.sum() if w.sum()>0 else 1.0)
-    ensemble_pred = np.adverage(predictions,axis=0, weights=w)
+    ensemble_pred = np.average(predictions,axis=0, weights=w)
     ensemble_score = r2(y.iloc[idx_ho], ensemble_pred)
-    return dict(name=f"huberEnsemble_eps{epsilons}", hold=ensemble_score, std=0.010,
+    return dict(name=f"HuberEnsemble_eps{epsilons}", hold=ensemble_score, std=0.010,
                 y_ho=ensemble_pred, builder=("huber_ensemble", epsilons, alpha, feats))
 
-def random_forst_temporal(train, idx_tr, idx_ho, feats, n_estimators=400, max_depth=12):
+def random_forest_temporal(train, idx_tr, idx_ho, feats, n_estimators=400, max_depth=12):
     X = numeric_df(train, feats)
     y = train["Y1"].reset_index(drop=True)
     rf = RandomForestRegressor(
@@ -286,13 +287,13 @@ def weighted_average_ensemble(models: Dict[str, dict], y_true):
     scores = [m['hold'] for m in models.values()]
     predictions = [m['y_ho'] for m in models.values()]
     scores_arr = np.array(scores)
-    scores_exp =np.exp(scores_arr * 10)
+    scores_exp = np.exp(scores_arr * 10)
     weights = scores_exp / scores_exp.sum()
     ensemble_pred = np.average(predictions, axis=0, weights=weights)
     ensemble_score = r2(y_true, ensemble_pred)
     model_names = list(models.keys())
     return dict(
-        name=f"WeightedEnsemble+{len(models)}models",
+        name=f"WeightedEnsemble_{len(models)}models",
         hold=ensemble_score,
         std=0.006,
         y_ho=ensemble_pred,
@@ -306,7 +307,7 @@ def final_predict(train, test, y, spec):
         X = numeric_df(train, feats); Xte = numeric_df(test, feats)
         n = len(train)
         cut_idx = int(np.floor(n*cut)); cut_idx = max(1, min(cut_idx, n-1))
-        early_abs = n.arange(cut_idx); late_abs = np.arange(cut_idx, n)
+        early_abs = np.arange(cut_idx); late_abs = np.arange(cut_idx, n)
         scE = RobustScaler().fit(X.iloc[early_abs])
         scL = RobustScaler().fit(X.iloc[late_abs])
         mE = Ridge(alpha=aE).fit(scE.transform(X.iloc[early_abs]), y.to_numpy()[early_abs])
@@ -316,9 +317,9 @@ def final_predict(train, test, y, spec):
         is_late = (test["time"].to_numpy() >= boundary_time)
         p = np.empty(len(test), dtype=np.float32)
         if (~is_late).sum()>0:
-            p(~is_late)=mE.predict(scE.transform(Xte[~is_late]))
+            p[~is_late]=mE.predict(scE.transform(Xte[~is_late]))
         if (is_late).sim()>0:
-            p(is_late)=mL.predict(scL.transform(Xte[is_late]))
+            p[is_late]=mL.predict(scL.transform(Xte[is_late]))
         return p
     
     elif kind == "huber_ensemble":
@@ -334,7 +335,7 @@ def final_predict(train, test, y, spec):
             predictions.append(m.predict(Xs_te))
         return np.mean(predictions, axis=0)
     
-    elif kind == "random_forst":
+    elif kind == "random_forest":
         n_estimators, max_depth, feats = spec[1:]
         X = numeric_df(train, feats); Xte = numeric_df(test, feats)
         rf = RandomForestRegressor(
@@ -347,8 +348,8 @@ def final_predict(train, test, y, spec):
     
     elif kind == "weighted_ensemble":
         model_names, weights, builders = spec[1:]
-        predicitions = [final_predict(train, test, y, b) for b in builders]
-        return np.average(predicitions, axis=0, weights=weights)
+        predictions = [final_predict(train, test, y, b) for b in builders]
+        return np.average(predictions, axis=0, weights=weights)
     
     return np.zeros(len(test), dtype=np.float32)
 
@@ -372,7 +373,7 @@ def evaluate_y1_advanced_cv(train_df: pd.DataFrame, test_df: pd.DataFrame) -> Di
     he = huber_ensemble(tr_fe, idx_tr, idx_ho, selected)
     models["huber_ensemble"] = he
 
-    rft = random_forst_temporal(tr_fe, idx_tr, idx_ho, selected)
+    rft = random_forest_temporal(tr_fe, idx_tr, idx_ho, selected)
     models["random_forest"] = rft
 
     we = weighted_average_ensemble(models, y.to_numpy()[idx_ho])
@@ -380,7 +381,7 @@ def evaluate_y1_advanced_cv(train_df: pd.DataFrame, test_df: pd.DataFrame) -> Di
 
     best_key = max(models.keys(), key=lambda k: models[k]["hold"])
     chosen = models[best_key]
-    spec = chosen["name"]
+    spec = chosen["builder"]
     selected_name = chosen["name"]
     selected_hold = float(chosen["hold"])
 
@@ -393,9 +394,9 @@ def evaluate_y1_advanced_cv(train_df: pd.DataFrame, test_df: pd.DataFrame) -> Di
         ),
         CachedArtifacts=dict(
             spec=spec,
-            selected_feats=list(selected)
+            selected_feats=list(selected),
             setup=dict(holdout_frac=HOLDOUT_FRAC, seed=SEED),
-        )
+        ),
         RuntimeSec=float(time.time() - t0),
     )
 
@@ -413,12 +414,12 @@ class Y1AdvancedFitted:
 
         feats = [c for c in self._feats if (c in tr_fe.columns and c in te_fe.columns)]
         if not feats:
-            feats = [c for c in CORE if c in tr_fa.columns and c in te_fe.columns]
+            feats = [c for c in CORE if c in tr_fe.columns and c in te_fe.columns]
 
         y = tr_fe["Y1"].reset_index(drop=True)
         preds = final_predict(tr_fe, te_fe, y, self._spec)
 
         lo = float(np.quantile(y, 0.001))
         hi = float(np.quantile(y, 0.999))
-        preds = np.clips(preds, lo, hi)
+        preds = np.clip(preds, lo, hi)
         return preds
