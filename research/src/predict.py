@@ -1,23 +1,23 @@
 import pandas as pd
-from .config import SUBMISSION_PATH, FEATURE_COLS
+from .config import SUBMISSION_PATH
+from src.y2_enhanced import Y2EnhancedFitted
+from src.y1_advanced_v11 import Y1AdvancedFitted
 
 def predict_submission(fitted_by_target, X_test, test_df):
-    # Y1: sklearn pipeline
-    y1_pred = fitted_by_target["Y1"].predict(X_test)
-
-    # Y2: either sklearn pipeline OR enhanced composite
+    # Y1 predictions
+    y1_model = fitted_by_target["Y1"]
+    if isinstance(y1_model, Y1AdvancedFitted):
+        y1_pred = y1_model.predict(test_df)
+    else:
+        y1_pred = y1_model.predict(X_test)
+    # Y2 predictions
     y2_model = fitted_by_target["Y2"]
-    try:
-        # Enhanced path exposes .predict(X_lgb, X_ridge, estra_meta)
-        from .feature_eng import make_enhanced_y2_features
-        # Build enhanced features with Y1 test preds as meta feature
-        # (train_df not needed here; we re-create features on test via the same function in training)
-        # minimal re-creation: assume the trainer expects just X_test for ridge part and enhanced features for LGB
-        # For deterministic inference, recompute enhanced features from original test_df alone is insufficient
-        # in practice we'd pass cached transformers; here we rebuild using train+test context from ctx.
-        raise AttributeError # fallthrough to simple path unless ctx wiring is added
-    except Exception:
-        # simple: if composite: it provides a single-argument .predict; if sklearn, same.
+
+    if isinstance(y2_model, Y2EnhancedFitted):
+        X_lgb   = y2_model.X_lgb_test
+        X_ridge = test_df[y2_model.ridge_feats]
+        y2_pred = y2_model.predict(X_lgb, X_ridge, extra_meta=y1_pred)
+    else:
         y2_pred = y2_model.predict(X_test)
 
     submission = pd.DataFrame({"id": test_df["id"], "Y1": y1_pred, "Y2": y2_pred})

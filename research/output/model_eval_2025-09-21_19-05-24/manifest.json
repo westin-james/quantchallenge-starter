@@ -1,0 +1,14 @@
+{
+  "run_dir": "output\\model_eval_2025-09-21_19-05-24",
+  "files": {
+    "cv_summary": "output/model_eval_2025-09-21_19-05-24/cv_summary.png",
+    "cv_folds_lines": "output/model_eval_2025-09-21_19-05-24/cv_folds_lines.png",
+    "cv_folds_heatmap": "output/model_eval_2025-09-21_19-05-24/cv_folds_heatmap.png",
+    "missingness": "output/model_eval_2025-09-21_19-05-24/missingness.png",
+    "OP_vs_Y2": "output/model_eval_2025-09-21_19-05-24/OP_vs_Y2.png",
+    "y2_lgb_importance": "output/model_eval_2025-09-21_19-05-24/y2_lgb_importance.png",
+    "y2_blend": "output/model_eval_2025-09-21_19-05-24/y2_blend.png"
+  },
+  "created_at": "2025-09-21T19:05:26",
+  "run_name": "model_eval"
+}
