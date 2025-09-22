@@ -35,5 +35,5 @@ LGB_BASE = dict(
     verbosity=-1
 )
 
-MODEL_KEYS = ["linreg", "ridge", "rf", "lgb", "lgb_y2_enhanced"]
+MODEL_KEYS = ["linreg", "ridge", "rf", "lgb", "y1_advanced_v11", "lgb_y2_enhanced"]
 TARGET_KEYS = ["Y1", "Y2"]

@@ -7,6 +7,7 @@ from src.config import MODEL_KEYS
 
 # Custom evaluator hook for lgb_y2_enhanced
 from src.y2_enhanced import EnhancedConfig, evaluate_y2_enhanced_cv
+from src.y1_advanced_v11 import evaluate_y1_advanced_cv
 
 from src.visualize import save_all_plots
 
@@ -17,6 +18,12 @@ def lgb_y2_enhanced_eval_adapter(target_key, X, y_by_target, ctx):
     cfg = EnhancedConfig()
     train_df = ctx["train_df"]; test_df = ctx["test_df"]
     return evaluate_y2_enhanced_cv(train_df, test_df, y_by_target["Y1"], y_by_target["Y2"], cfg)
+
+def y1_advanced_eval_adapter(target_key, X, y_by_target, ctx):
+    if target_key != "Y1":
+        return None
+    train_df = ctx["train_df"]; test_df = ctx["test_df"]
+    return evaluate_y1_advanced_cv(train_df, test_df)
 
 def main():
     ######################## 1. LOADING DATA ########################
@@ -31,7 +38,9 @@ def main():
 
     ######################## 3. EVALUATE MODELS ########################
     print("\n######################## 3. EVALUATE ALL MODELS (Y1 & Y2) ########################\n")
-    custom = {"lgb_y2_enhanced": lgb_y2_enhanced_eval_adapter}
+    custom = {"lgb_y2_enhanced": lgb_y2_enhanced_eval_adapter,
+              "y1_advanced_v11": y1_advanced_eval_adapter,
+    }
     ctx = {"train_df": train_df, "test_df": test_df}
     cv_long = crossval_grid(X_train, y_by_target, tscv, MODEL_KEYS, scoring="r2", 
                             custom_evaluators=custom, ctx=ctx)

@@ -47,5 +47,6 @@ def get_model_display_name(model_key: str) -> str:
         "ridge": "Ridge",
         "rf": "Random Forest",
         "lgb": "LightGBM",
+        "y1__advanced_v11": "Y1 Advanced v11",
         "lgb_y2_enhanced": "LightGBM Y2 (Enhanced + Blend)",
     }.get(model_key, model_key)

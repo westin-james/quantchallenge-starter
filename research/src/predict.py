@@ -1,11 +1,15 @@
 import pandas as pd
 from .config import SUBMISSION_PATH
 from src.y2_enhanced import Y2EnhancedFitted
+from src.y1_advanced_v11 import Y1AdvancedFitted
 
 def predict_submission(fitted_by_target, X_test, test_df):
     # Y1 predictions
-    y1_pred = fitted_by_target["Y1"].predict(X_test)
-
+    y1_model = fitted_by_target["Y1"]
+    if isinstance(y1_model, Y1AdvancedFitted):
+        y1_pred = y1_model.predict(test_df)
+    else:
+        y1_pred = y1_model.predict(X_test)
     # Y2 predictions
     y2_model = fitted_by_target["Y2"]
 
