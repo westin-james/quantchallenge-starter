@@ -85,7 +85,23 @@ def oof_lgb_resid_level(params: dict, X: pd.DataFrame, y_level: pd.Series,
                 eval_set=[(Xva2, y_va_t)],
                 callbacks=[lgb.early_stopping(early_rounds, verbose=False)])
         pred_t = mdl.predict(Xva2)
-        lvl_pred = inv(pred_t) + ar_in.iloc[va_idx].values
+        lvl_pred = inv(pred_t) + ar_in.iloc[va_idx].values[va_mask]
         oof_level[va_idx] = lvl_pred
         rounds.append(int(getattr(mdl, "best_iteration_", params.get("n_estimators", 800))))
     return oof_level, rounds
+
+def decorrelate_after_topk(X: pd.DataFrame, keep_list, thresh=0.95, sample_rows=20000):
+    keep_list = list(keep_list)
+    Xs = X[keep_list]
+    if len(Xs) > sample_rows:
+        idx = np.linspace(0, len(Xs) -1, sample_rows).astype(int)
+        Xs = Xs.iloc[idx]
+    selected = []
+    for f in keep_list:
+        ok = True
+        for s in selected:
+            c = np.corrcoef(Xs[s].values, Xs[f].values)[0, 1]
+            if np.isfinite(c) and abs(c) >= thresh:
+                ok = False; break
+        if ok: selected.append(f)
+    return selected

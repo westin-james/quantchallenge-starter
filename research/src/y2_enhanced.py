@@ -34,8 +34,7 @@ def _safe_r2(y_true, y_pred):
 from src.feature_eng import make_enhanced_y2_features, Y2TinyInteractions
 from src.config import RANDOM_STATE
 from src.arx_boosting import (
-    arx_prepare, lgb_holdout_resid_score, oof_lgb_resid_level,
-    decorrelate_after_topk, asha_search
+    arx_prepare, lgb_holdout_resid_score, oof_lgb_resid_level, decorrelate_after_topk,
 )
 
 try:
@@ -227,53 +226,50 @@ def evaluate_y2_enhanced_cv(train_df, test_df, y1, y2, cfg: EnhancedConfig):
     param_combinations = param_combinations[:cfg.MAX_GRID_COMBINATIONS]
     since_best = 0
 
-    if cfg.ASHA_MODE:
-        grids = dict(lr=grid_lr, sub=grid_sub, ff=grid_ff, min=grid_min, l2=grid_l2, l1=grid_l1, lea=grid_lea)
-        best_combo, best_score = asha_search(X_tr_hold, ar['y_tr_t'], X_ho_hold, ar['y_ho_t'], dict(LGB_BASE), grids)
-    else:
-        with tqdm(total=len(param_combinations), desc="Grid search progress", ncols=100) as pbar:
-            for lr, subs, ff, mleaf, l2, l1, leaves, iters in param_combinations:
-                params = dict(LGB_BASE, learning_rate=lr, subsample=subs,
-                              feature_fraction=ff, min_data_in_leaf=mleaf,
-                              reg_lambda=l2, reg_alpha=l1, num_leaves=leaves,
-                              n_estimators=iters, random_state=cfg.SEED)
 
-                score, best_it = lgb_holdout_resid_score(
-                    params,
-                    X_tr_hold, X_ho_hold,
-                    ar['y_tr_t'], ar['y_ho_t'], ar['w_tr'],
-                    ar['inv_hold'], ar['ar_in'].iloc[ho_idx].values,
-                    y2.iloc[ho_idx].values,
-                    early_rounds=60
-                )
+    with tqdm(total=len(param_combinations), desc="Grid search progress", ncols=100) as pbar:
+        for lr, subs, ff, mleaf, l2, l1, leaves, iters in param_combinations:
+            params = dict(LGB_BASE, learning_rate=lr, subsample=subs,
+                            feature_fraction=ff, min_data_in_leaf=mleaf,
+                            reg_lambda=l2, reg_alpha=l1, num_leaves=leaves,
+                            n_estimators=iters, random_state=cfg.SEED)
 
-                if score > best_score + cfg.MIN_GAIN:
-                    best_score = score
-                    best_combo = params.copy()
-                    best_combo["n_estimators"] = int(best_it)
-                    best_history.append({
-                        "step": len(best_history) + 1,
-                        "r2": float(best_score),
-                        "params": {
-                            "learning_rate": float(best_combo["learning_rate"]),
-                            "subsample": float(best_combo["subsample"]),
-                            "feature_fraction": float(best_combo["feature_fraction"]),
-                            "min_data_in_leaf": int(best_combo["min_data_in_leaf"]),
-                            "reg_lambda": float(best_combo["reg_lambda"]),
-                            "reg_alpha": float(best_combo["reg_alpha"]),
-                            "num_leaves": int(best_combo["num_leaves"]),
-                            "n_estimators": int(best_combo["n_estimators"]),
-                        }
-                    })
-                    since_best = 0
-                    pbar.set_postfix({'best_R2': f'{best_score:.4f}'})
-                else:
-                    since_best += 1
-                    if since_best >= cfg.EARLY_STOP_PATIENCE:
-                        print(f"[early-exit] No improvement > {cfg.MIN_GAIN:.4f} in {cfg.EARLY_STOP_PATIENCE} trials.")
-                        break
+            score, best_it = lgb_holdout_resid_score(
+                params,
+                X_tr_hold, X_ho_hold,
+                ar['y_tr_t'], ar['y_ho_t'], ar['w_tr'],
+                ar['inv_hold'], ar['ar_in'].iloc[ho_idx].values,
+                y2.iloc[ho_idx].values,
+                early_rounds=60
+            )
 
-                pbar.update(1)
+            if score > best_score + cfg.MIN_GAIN:
+                best_score = score
+                best_combo = params.copy()
+                best_combo["n_estimators"] = int(best_it)
+                best_history.append({
+                    "step": len(best_history) + 1,
+                    "r2": float(best_score),
+                    "params": {
+                        "learning_rate": float(best_combo["learning_rate"]),
+                        "subsample": float(best_combo["subsample"]),
+                        "feature_fraction": float(best_combo["feature_fraction"]),
+                        "min_data_in_leaf": int(best_combo["min_data_in_leaf"]),
+                        "reg_lambda": float(best_combo["reg_lambda"]),
+                        "reg_alpha": float(best_combo["reg_alpha"]),
+                        "num_leaves": int(best_combo["num_leaves"]),
+                        "n_estimators": int(best_combo["n_estimators"]),
+                    }
+                })
+                since_best = 0
+                pbar.set_postfix({'best_R2': f'{best_score:.4f}'})
+            else:
+                since_best += 1
+                if since_best >= cfg.EARLY_STOP_PATIENCE:
+                    print(f"[early-exit] No improvement > {cfg.MIN_GAIN:.4f} in {cfg.EARLY_STOP_PATIENCE} trials.")
+                    break
+
+            pbar.update(1)
 
     print(f"\nBest holdout R^2 achieved: {best_score:.4f}")
 
