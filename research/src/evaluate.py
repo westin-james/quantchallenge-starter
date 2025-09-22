@@ -69,10 +69,10 @@ def summarize_wide(cv_long_df: pd.DataFrame) -> pd.DataFrame:
 def pick_best_per_target(cv_long_df: pd.DataFrame) -> Dict[str, str]:
     best = {}
     for tgt, df_t in cv_long_df.groupby("Target"):
-        # if tgt == "Y1":
-        #     if (df_t["ModelKey"] == "y1_advanced_v11").any():
-        #         best[tgt] = "y1_advanced_v11"
-        #         continue
+        if tgt == "Y1":
+            if (df_t["ModelKey"] == "y1_advanced_v11").any():
+                best[tgt] = "y1_advanced_v11"
+                continue
         idx = df_t["MeanR2"].idxmax()
         best[tgt] = df_t.loc[idx,"ModelKey"]
     return best

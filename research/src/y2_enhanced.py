@@ -232,11 +232,11 @@ def evaluate_y2_enhanced_cv(train_df, test_df, y1, y2, cfg: EnhancedConfig):
     
     _tag, y2_ridge_cols, y2_ridge, y2_ridge_oof, _score = choice
 
-    grid_lr = [0.01, 0.0125, 0.015, 0.0175, 0.019, 0.02] if cfg.SPEED_MODE else [0.01, 0.015, 0.02]
+    grid_lr = [0.01, 0.0125, 0.015, 0.0175, 0.02] if cfg.SPEED_MODE else [0.01, 0.015, 0.02]
     grid_sub = [0.65, 0.70, 0.75] if cfg.SPEED_MODE else [0.65, 0.70, 0.75]
-    grid_ff = [0.50, 0.55, 0.60, 0.65] if cfg.SPEED_MODE else [0.5, 0.55, 0.6, 0.65]
-    grid_min = [128, 160, 192, 224, 256, 320] if cfg.SPEED_MODE else [128, 256, 384]
-    grid_l2 = [30.0, 45.0, 60.0] if cfg.SPEED_MODE else [30.0, 45.0, 60.0]
+    grid_ff = [0.50, 0.55, 0.60, 0.65, 0.70] if cfg.SPEED_MODE else [0.5, 0.55, 0.6, 0.65]
+    grid_min = [128, 192, 256] if cfg.SPEED_MODE else [128, 256, 384]
+    grid_l2 = [30, 45.0, 60.0] if cfg.SPEED_MODE else [30.0, 45.0, 60.0]
     grid_l1 = [0.5] if cfg.SPEED_MODE else [0.5, 1.0]
     grid_lea = [15, 31] if cfg.SPEED_MODE else [15, 31]
     grid_it = [3000] if cfg.SPEED_MODE else [3000, 4000, 5000]
