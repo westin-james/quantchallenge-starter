@@ -26,7 +26,7 @@ class EnhancedConfig:
     HOLDOUT_FRAC: float = 0.20
     SEED: int = RANDOM_STATE
     TOPK_Y2: int = 55
-    SPEED_MODE: bool = False
+    SPEED_MODE: bool = True
     USE_META_LEARNING: bool = True
     USE_Y1_FOR_Y2: bool = True
     RIDGE_ALPHA_Y2: float = 100.0
@@ -186,7 +186,7 @@ def evaluate_y2_enhanced_cv(train_df, test_df, y1, y2, cfg: EnhancedConfig):
 
             pbar.update(1)
 
-    print(f"\nBest holdout R^2 achieved: '{best_score:.4f}")
+    print(f"\nBest holdout R^2 achieved: {best_score:.4f}")
 
     lgb_chosen = lgb.LGBMRegressor(**best_combo)
     lgb_oof, _, lgb_rounds = _oof_predictions(lgb_chosen, X_y2_tr, y2, splits, is_lgb=True)

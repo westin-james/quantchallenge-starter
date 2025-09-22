@@ -10,6 +10,7 @@ from src.y2_enhanced import EnhancedConfig, evaluate_y2_enhanced_cv
 from src.y1_advanced_v11 import evaluate_y1_advanced_cv
 
 from src.visualize import save_all_plots
+from pathlib import Path
 
 def lgb_y2_enhanced_eval_adapter(target_key, X, y_by_target, ctx):
     # Only applies to Y2
@@ -26,6 +27,7 @@ def y1_advanced_eval_adapter(target_key, X, y_by_target, ctx):
     return evaluate_y1_advanced_cv(train_df, test_df)
 
 def main():
+
     ######################## 1. LOADING DATA ########################
     print("\n ####################### 1. LOADING DATA ########################################\n")
     train_df, test_df, feature_cols = load_train_test()
@@ -80,7 +82,19 @@ def main():
         print(f"  - {key}: {path}")
 
     print("\nANALYSIS COMPLETE")
-    print(f"Best combined performance: {summary['Combined'].iloc[0]:.4f}")
+    best_combined = float(summary['Combined'].iloc[0])
+    print(f"Best combined performance: {best_combined:.4f}")
+
+    run_dir = Path(res.run_dir)
+    table_txt = summary[["ModelKey","Model","Y1","Y2","Combined"]].to_string(index=False)
+    out_txt = "\n".join([
+        table_txt,
+        "",
+        "ANALYSIS COMPLETE",
+        f"Best combined performance: {best_combined:.4}",
+    ])
+    (run_dir / "cv_summary.txt").write_text(out_txt)
+    print(f"Wrote CV summary text to: {(run_dir / 'cv_summary.txt').as_posix()}")
 
 if __name__ == "__main__":
     main()

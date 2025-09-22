@@ -22,11 +22,13 @@ def train_best_models(X, y_by_target: Dict[str, pd.Series], selections: Dict[str
     test_df = ctx["test_df"]
 
     for tgt, mkey in selections.items():
+        print(f"[TRAIN][START] target={tgt} model={mkey}")
         if mkey == "lgb_y2_enhanced":
             if tgt != "Y2":
                 pipe = make_pipeline("ridge", tgt)
                 pipe.fit(X, y_by_target[tgt])
                 fitted[tgt] = pipe
+                print(f"[TRAIN][END]   target={tgt} model={mkey} -> fallback ridge fitted")
                 continue
 
             # Re-run evaluator to get artifacts (or you could cache from evaluate step)
@@ -80,20 +82,24 @@ def train_best_models(X, y_by_target: Dict[str, pd.Series], selections: Dict[str
                 X_lgb_test=art["X_y2_te"],
                 ridge_feats=ridge_cols,
             )
+            print(f"[TRAIN][END]   target={tgt} model={mkey} (LGB ensemble + ridge{' + meta' if use_meta else ''})")
         elif mkey == "y1_advanced_v11":
             if tgt != "Y1":
                 pipe = make_pipeline("ridge", tgt)
                 pipe.fit(X, y_by_target[tgt])
                 fitted[tgt] = pipe
+                print(f"[TRAIN][END]   target={tgt} model={mkey} -> fallback ridge fitted")
                 continue
             res = evaluate_y1_advanced_cv(train_df, test_df)
             art = res["CachedArtifacts"]
             spec = art["spec"]
             feats = art["selected_feats"]
             fitted["Y1"] = Y1AdvancedFitted(train_df=train_df, spec=spec, selected_feats=feats)
+            print(f"[TRAIN][END]   target=Y1 model={mkey} (advanced pipeline)")
         else:
             pipe = make_pipeline(mkey, tgt)
             pipe.fit(X, y_by_target[tgt])
             fitted[tgt] = pipe
+            print(f"[TRAIN][END]   target={tgt} model={mkey}")
     
     return fitted

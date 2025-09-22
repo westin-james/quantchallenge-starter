@@ -238,13 +238,16 @@ def adaptive_two_window_ridge(train, test, idx_tr, idx_ho, feats,
 
     boundary_time = train["time"].iloc[idx_tr[cut_idx]]
     is_late = (train["time"].iloc[idx_ho].to_numpy() >= boundary_time)
+    p = np.empty(len(idx_ho), dtype=np.float32)
     if (~is_late).sum()>0:
         p[~is_late]=mE.predict(scE.transform(X.iloc[idx_ho[~is_late]]))
     if (is_late).sum()>0:
         p[is_late]=mL.predict(scL.transform(X.iloc[idx_ho[is_late]]))
 
-        return dict(name=name, hold=r2(y.iloc[idx_ho], p), std=0.008, y_ho=p,
-                    builder=("adaptive_two_window", cut, aE, aL, lam, feats))
+    return dict(
+        name=name, hold=r2(y.iloc[idx_ho], p), std=0.008, y_ho=p,
+        builder=("adaptive_two_window", cut, aE, aL, lam, feats)
+    )
     
 def huber_ensemble(train, idx_tr, idx_ho, feats, epsilons=[1.2, 1.5, 2.0], alpha=1e-4):
     X = numeric_df(train, feats)
