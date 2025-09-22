@@ -57,15 +57,13 @@ def oof_lgb_resid_level(params: dict, X: pd.DataFrame, y_level: pd.Series,
                         use_time_decay=True, decay_strength=1.2,
                         early_rounds=60):
     n = len(y_level)
-    oof_level = np.full(n, np.nan)
-    rounds = []
+    oof_level = np.full(n, np.nan); rounds = []
     for tr_idx, va_idx in splits:
         resid = (y_level - ar_in)
         y_tr_raw, y_va_raw = resid.iloc[tr_idx], resid.iloc[va_idx]
         Xtr, Xva = X.iloc[tr_idx], X.iloc[va_idx]
 
-        tr_mask = np.isfinite(y_tr_raw.values)
-        va_mask = np.isfinite(y_va_raw.values)
+        tr_mask = np.isfinite(y_tr_raw.values); va_mask = np.isfinite(y_va_raw.values)
         Xtr2, y_tr2 = Xtr.iloc[tr_mask], y_tr_raw.iloc[tr_mask]
         Xva2, y_va2 = Xva.iloc[va_mask], y_va_raw.iloc[va_mask]
 
@@ -75,8 +73,7 @@ def oof_lgb_resid_level(params: dict, X: pd.DataFrame, y_level: pd.Series,
             y_va_t = asinh_transform(y_va2, c)
             inv = lambda z: asinh_inverse(z, c)
         else:
-            y_tr_t, y_va_t = y_tr2, y_va2
-            inv = lambda z: z
+            y_tr_t, y_va_t = y_tr2, y_va2; inv = lambda z: z
 
         w = time_decay_weights(len(tr_idx), decay_strength)[tr_mask] if use_time_decay else None
 
@@ -86,7 +83,7 @@ def oof_lgb_resid_level(params: dict, X: pd.DataFrame, y_level: pd.Series,
                 callbacks=[lgb.early_stopping(early_rounds, verbose=False)])
         pred_t = mdl.predict(Xva2)
         lvl_pred = ar_in.iloc[va_idx].values.copy()
-        lvl_pred = inv(pred_t) + ar_in.iloc[va_idx].values[va_mask]
+        lvl_pred[va_mask] = inv(pred_t) + ar_in.iloc[va_idx].values[va_mask]
         oof_level[va_idx] = lvl_pred
         rounds.append(int(getattr(mdl, "best_iteration_", params.get("n_estimators", 800))))
     return oof_level, rounds
