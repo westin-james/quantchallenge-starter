@@ -160,6 +160,7 @@ def evaluate_y2_enhanced_cv(train_df, test_df, y1, y2, cfg: EnhancedConfig):
 
     X_tr_hold = X_y2_tr.iloc[tr_idx]; X_ho_hold = X_y2_tr.iloc[ho_idx]
     best_score, best_combo = -1e9, None
+    best_history = []
 
     param_combinations = list(product(grid_lr, grid_sub, grid_ff, grid_min, grid_l2, grid_l1, grid_lea, grid_it))
     
@@ -182,6 +183,20 @@ def evaluate_y2_enhanced_cv(train_df, test_df, y1, y2, cfg: EnhancedConfig):
                 best_score = score
                 best_combo = params.copy()
                 best_combo["n_estimators"] = int(getattr(mdl, "best_iteration_", params["n_estimators"]))
+                best_history.append({
+                    "step": len(best_history) + 1,
+                    "r2": float(best_score),
+                    "params": {
+                        "learning_rate": float(best_combo["learning_rate"]),
+                        "subsample": float(best_combo["subsample"]),
+                        "feature_fraction": float(best_combo["feature_fraction"]),
+                        "min_data_in_leaf": int(best_combo["min_data_in_leaf"]),
+                        "reg_lambda": float(best_combo["reg_lambda"]),
+                        "reg_alpha": float(best_combo["reg_alpha"]),
+                        "num_leaves": int(best_combo["num_leaves"]),
+                        "n_estimators": int(best_combo["n_estimators"]),
+                    }
+                })
                 pbar.set_postfix({'best_R2': f'{best_score:.4f}'})
 
             pbar.update(1)
@@ -214,6 +229,7 @@ def evaluate_y2_enhanced_cv(train_df, test_df, y1, y2, cfg: EnhancedConfig):
         MeanR2=mean_r2,
         Details=dict(
             best_params={k: (int(v) if isinstance(v, (np.integer,)) else v) for k, v in best_combo.items()},
+            best_history=best_history,
             final_rounds=int(final_rounds),
             simple_w=simple_w,
             used_meta=bool(use_meta),

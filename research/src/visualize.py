@@ -203,6 +203,8 @@ def plot_y2_blend_info(y2_enhanced_fitted) -> plt.Figure:
     plt.tight_layout()
     return fig
 
+def _short_params_label(p: Dict[str, Any]) -> 
+
 @dataclass(frozen=True)
 class SaveResult:
     run_dir: str
