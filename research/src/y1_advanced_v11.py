@@ -120,7 +120,7 @@ def build_y1_candidate_list(train_df: pd.DataFrame, test_df: pd.DataFrame) -> Li
     lag_feats = [c for c in common if "_lag" in c]
     other_extras = [c for c in common if c not in core_first and c not in interactions
                     and c not in rolling_feats and c not in time_bases and c not in lag_feats]
-    return core_first + interactions + lag_feats + rolling_feats + other_extras + time_bases if (other_extras:=other_extras) is not None else core_first + interactions + lag_feats + rolling_feats + time_bases
+    return core_first + interactions + lag_feats + rolling_feats + other_extras + time_bases
 
 def preselect_features(train: pd.DataFrame, test: pd.DataFrame, candidate_feats: List[str], idx_tr, max_feats=MAX_Y1_FEATS):
     y = train["Y1"].iloc[idx_tr].to_numpy()
@@ -166,7 +166,7 @@ def preselect_features(train: pd.DataFrame, test: pd.DataFrame, candidate_feats:
     if len(keep) > max_feats:
         protected = set(CORE) | set(available_pins) | set(interactions_sorted[:3]) | set(lag_feats_sorted[:2])
         removable = [c for c in keep if c not in protected]
-        removable_sorted = sorted(removable, key=lambda c: corrs:get(c,0.0))
+        removable_sorted = sorted(removable, key=lambda c: corrs.get(c,0.0))
         to_remove = len(keep) - max_feats
         for c in removable_sorted[:to_remove]:
             keep.remove(c)
@@ -213,7 +213,7 @@ def adaptive_two_window_ridge(train, test, idx_tr, idx_ho, feats,
                     p = np.empty(len(idx_ho), dtype=np.float32)
                     if (~is_late).sum()>0:
                         p[~is_late]=mE.predict(scE.transform(X.iloc[idx_ho[~is_late]]))
-                    if (is_late).sim()>0:
+                    if (is_late).sum()>0:
                         p[is_late]=mL.predict(scL.transform(X.iloc[idx_ho[is_late]]))
                     score = r2(y.iloc[idx_ho], p)
                     if (best is None) or (score > best[0]):
@@ -240,7 +240,7 @@ def adaptive_two_window_ridge(train, test, idx_tr, idx_ho, feats,
     is_late = (train["time"].iloc[idx_ho].to_numpy() >= boundary_time)
     if (~is_late).sum()>0:
         p[~is_late]=mE.predict(scE.transform(X.iloc[idx_ho[~is_late]]))
-    if (is_late).sim()>0:
+    if (is_late).sum()>0:
         p[is_late]=mL.predict(scL.transform(X.iloc[idx_ho[is_late]]))
 
         return dict(name=name, hold=r2(y.iloc[idx_ho], p), std=0.008, y_ho=p,
@@ -318,7 +318,7 @@ def final_predict(train, test, y, spec):
         p = np.empty(len(test), dtype=np.float32)
         if (~is_late).sum()>0:
             p[~is_late]=mE.predict(scE.transform(Xte[~is_late]))
-        if (is_late).sim()>0:
+        if (is_late).sum()>0:
             p[is_late]=mL.predict(scL.transform(Xte[is_late]))
         return p
     
