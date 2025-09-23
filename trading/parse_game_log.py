@@ -32,11 +32,11 @@ def parse_stream_to_events(io):
     return events
 
 def main():
-    ap = argparse.ArgumentParser(description="Convert strategy log lines into JSON array")
+    ap = argparse.ArgumentParser(description="Convert one line array to a JSON array of events")
     ap.add_argument("-i","--input", type=str, default=None, help="Path to log file (default: stdin)")
-    ap.add_argument("-o","--output", type=str, default="game_events.json", help="Path to write JSON file")
-    ap.add_argument("--only-base-keys", action="store_true",
-                    help="If set, drop extra fields and keep only base event keys")
+    ap.add_argument("-o","--output", type=str, default="game_events.json", help="Output JSON file")
+    ap.add_argument("--full", action="store_true",
+                    help="Include extra fields. Default is base event keys only.")
     args = ap.parse_args()
 
     if args.input:
@@ -45,11 +45,8 @@ def main():
     else:
         events = parse_stream_to_events(sys.stdin)
     
-    if args.only_base_keys:
-        cleaned = []
-        for ev in events:
-            cleaned.append({k: ev.get(k, None) for k in BASE_KEYS})
-        events = cleaned
+    if not args.full:
+        events = [{k: ev.get(k, None) for k in BASE_KEYS} for ev in events]
     
     # Write as array
     with open(args.output, "w", encoding="utf-8") as out:

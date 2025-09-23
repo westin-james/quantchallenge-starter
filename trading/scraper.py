@@ -163,12 +163,7 @@ class Strategy:
         self._recompute_bbo()
 
     def on_account_update(
-        self,
-        ticker: Ticker,
-        side: Side,
-        price: float,
-        quantity: float,
-        capital_remaining: float,
+        self, ticker: Ticker, side: Side, price: float, quantity: float, capital_remaining: float,
     ) -> None:
         """Called whenever one of your orders is filled.
         Parameters
@@ -233,7 +228,7 @@ class Strategy:
         if event_type and event_type != "END_GAME":
             self.game_active = True
 
-        payload = {
+        tick = {
             # Base event data
             "home_away": home_away if home_away is not None else "unknown",
             "home_score": home_score,
@@ -260,12 +255,13 @@ class Strategy:
             "float": self.capital_remaining,
             "position": self.position,
         }
-
-        print(json.dumps(payload, separators=(",", ":")))
+        self._events.append(tick)
+        
 
         if event_type == "END_GAME":
             # IMPORTANT: Highly recommended to call reset_state() when the
             # game ends. See reset_state() for more details.
+            print(json.dumps(tick, separators=(",", ":")))
             self.reset_state()
             return
 
