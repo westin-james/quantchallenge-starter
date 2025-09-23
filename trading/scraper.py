@@ -85,7 +85,7 @@ class Strategy:
         # Market state
         self.bids: Dict[float, float] = {}
         self.asks: Dict[float, float] = {}
-        self.best_bids: Optional[float] = None
+        self.best_bid: Optional[float] = None
         self.best_ask: Optional[float] = None
         self.last_trade_price: Optional[float] = None
         
@@ -105,9 +105,14 @@ class Strategy:
         self.best_bid = max(self.bids.keys()) if self.bids else None
         self.best_ask = min(self.asks.keys()) if self.asks else None
     
-    def _mid(self) -> None:
+    def _mid(self) -> Optional[float]:
         if self.best_bid is not None and self.best_ask is not None:
             return (self.best_bid + self.best_ask) / 2.0
+        return None
+    
+    def _spread(self) -> Optional[float]:
+        if self.best_bid is not None and self.best_ask is not None:
+            return self.best_ask - self.best_bid
         return None
     
     def _price_for_timestamp(self) -> Optional[float]:

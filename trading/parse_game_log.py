@@ -53,7 +53,7 @@ def main():
     
     # Write as array
     with open(args.output, "w", encoding="utf-8") as out:
-        json.dump(events, out, ensure_ascii=False, indet=2)
+        json.dump(events, out, ensure_ascii=False, indent=2)
     
     print(f"Wrote {len(events)} events to {args.output}")
 
