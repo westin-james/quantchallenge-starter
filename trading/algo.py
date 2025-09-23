@@ -61,36 +61,6 @@ class KellyCriterion:
     min_edge: float = 0.05
 
 
-def update_average_possession_length(team: CurrGameState, new_possession_length: int) -> None:
-    """
-    Update average possesion length variable in CurrGameState
-    """ 
-
-def calculate_expected_remaining_possessions(team: CurrGameState, time_remaining: int) -> None:
-    """
-    Use the average posession length and time remaining to calculate
-    """
-
-def calculate_average_points_per_possessions(team: CurrGameState) -> int: 
-    """
-    Use the team points and possessions to calculate
-    """
-
-def calculate_expected_total_points() -> None:
-    """
-    Use remaining possessions and average points scored per drive
-    """
-
-def calculate_probability(expectedA: int, expectedB: int, differential = 12.0) -> float:
-    """
-    Use calculate expected total points to get them and pass them as parameters
-    Then, use standard deviation of 12 for nba game point differential
-    get z-score: expected / differential
-    get p = phi(z) = 0.5*(1+erf(z / sqrt(2)))
-    then return p
-    """
-
-
 def blend_ratings(player: CurrPlayerState) -> None:
     """
     This takes the offensive and defensive ratings, along with
@@ -126,4 +96,33 @@ def update_lineup(lineup: List[CurrPlayerState], event: dict) -> None:
     """
     Set the new lineup after a substitution, change currOverall,
     update ratings
+    """
+    
+def update_average_possession_length(team: CurrGameState, new_possession_length: int) -> None:
+    """
+    Update average possesion length variable in CurrGameState
+    """ 
+
+def calculate_expected_remaining_possessions(team: CurrGameState, time_remaining: int) -> None:
+    """
+    Use the average posession length and time remaining to calculate
+    """
+
+def calculate_average_points_per_possessions(team: CurrGameState) -> int: 
+    """
+    Use the team points and possessions to calculate
+    """
+
+def calculate_expected_total_points() -> None:
+    """
+    Use remaining possessions and average points scored per drive
+    """
+
+def calculate_probability(expectedA: int, expectedB: int, differential = 12.0) -> float:
+    """
+    Use calculate expected total points to get them and pass them as parameters
+    Then, use standard deviation of 12 for nba game point differential
+    get z-score: expected / differential
+    get p = phi(z) = 0.5*(1+erf(z / sqrt(2)))
+    then return p
     """
