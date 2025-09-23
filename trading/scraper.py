@@ -5,7 +5,7 @@ Algorithmic strategy template
 """
 
 from enum import Enum
-from typing import Optional, Dict
+from typing import Optional, Dict, List
 import json
 
 class Side(Enum):
@@ -95,6 +95,7 @@ class Strategy:
 
         # Game state
         self.game_active: bool = False
+        self._events: List[Dict] = []
 
     def __init__(self) -> None:
         """Your initialization code goes here."""
@@ -116,10 +117,8 @@ class Strategy:
         return None
     
     def _price_for_timestamp(self) -> Optional[float]:
-        m = self._mid()
-        if m is not None:
-            return m
-        return self.last_trade_price
+        mid = self._mid()
+        return mid if mid is not None else self.last_trade_price
 
     # ---------------------------- Exchange callbacks ---------------------------- #
     def on_trade_update(
@@ -163,7 +162,7 @@ class Strategy:
         self._recompute_bbo()
 
     def on_account_update(
-        self, ticker: Ticker, side: Side, price: float, quantity: float, capital_remaining: float,
+        self, ticker: Ticker, side: Side, price: float, quantity: float, capital_remaining: float
     ) -> None:
         """Called whenever one of your orders is filled.
         Parameters
@@ -261,7 +260,7 @@ class Strategy:
         if event_type == "END_GAME":
             # IMPORTANT: Highly recommended to call reset_state() when the
             # game ends. See reset_state() for more details.
-            print(json.dumps(tick, separators=(",", ":")))
+            print(json.dumps(self._events, separators=(",", ":")), flush=True)
             self.reset_state()
             return
 

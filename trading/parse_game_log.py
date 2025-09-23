@@ -27,8 +27,7 @@ def parse_stream_to_events(io):
             events.append(obj)
         elif isinstance(obj, list):
             events.extend([x for x in obj if isinstance(x, dict)])
-        else:
-            continue
+
     return events
 
 def main():
