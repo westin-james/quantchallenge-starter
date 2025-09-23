@@ -5,8 +5,7 @@ Algorithmic strategy template
 """
 
 from enum import Enum
-from typing import Optional, Dict, List
-import json
+from typing import Optional
 
 class Side(Enum):
     BUY = 0
@@ -82,45 +81,12 @@ class Strategy:
         Note: In production execution, the game will start from the beginning
         and will not be replayed.
         """
-        # Market state
-        self.bids: Dict[float, float] = {}
-        self.asks: Dict[float, float] = {}
-        self.best_bid: Optional[float] = None
-        self.best_ask: Optional[float] = None
-        self.last_trade_price: Optional[float] = None
-        
-        # Account state
-        self.position: float = 0.0
-        self.capital_remaining: Optional[float] = None
-
-        # Game state
-        self.game_active: bool = False
-        self._events: List[Dict] = []
+        pass
 
     def __init__(self) -> None:
         """Your initialization code goes here."""
         self.reset_state()
 
-    # ---------------------------- Helpers ---------------------------- #
-    def _recompute_bbo(self) -> None:
-        self.best_bid = max(self.bids.keys()) if self.bids else None
-        self.best_ask = min(self.asks.keys()) if self.asks else None
-    
-    def _mid(self) -> Optional[float]:
-        if self.best_bid is not None and self.best_ask is not None:
-            return (self.best_bid + self.best_ask) / 2.0
-        return None
-    
-    def _spread(self) -> Optional[float]:
-        if self.best_bid is not None and self.best_ask is not None:
-            return self.best_ask - self.best_bid
-        return None
-    
-    def _price_for_timestamp(self) -> Optional[float]:
-        mid = self._mid()
-        return mid if mid is not None else self.last_trade_price
-
-    # ---------------------------- Exchange callbacks ---------------------------- #
     def on_trade_update(
         self, ticker: Ticker, side: Side, quantity: float, price: float
     ) -> None:
@@ -136,7 +102,7 @@ class Strategy:
         price
             Price that trade was executed at
         """
-        self.last_trade_price = price
+        print(f"Python Trade update: {ticker} {side} {quantity} shares @ {price}")
 
     def on_orderbook_update(
         self, ticker: Ticker, side: Side, quantity: float, price: float
@@ -153,16 +119,15 @@ class Strategy:
         quantity
             Volume placed into orderbook
         """
-        book = self.bids if side == Side.BUY else self.asks
-        if quantity <= 0.0:
-            if price in book:
-                del book[price]
-        else:
-            book[price] = quantity
-        self._recompute_bbo()
+        pass
 
     def on_account_update(
-        self, ticker: Ticker, side: Side, price: float, quantity: float, capital_remaining: float
+        self,
+        ticker: Ticker,
+        side: Side,
+        price: float,
+        quantity: float,
+        capital_remaining: float,
     ) -> None:
         """Called whenever one of your orders is filled.
         Parameters
@@ -178,25 +143,21 @@ class Strategy:
         capital_remaining
             Amount of capital after fulfilling order
         """
-        if side == Side.BUY:
-            self.position += quantity
-        else:
-            self.position -= quantity
-        self.capital_remaining = capital_remaining
+        pass
 
     def on_game_event_update(self,
-                             event_type: str,
-                             home_away: str,
-                             home_score: int,
-                             away_score: int,
-                             player_name: Optional[str],
-                             substituted_player_name: Optional[str],
-                             shot_type: Optional[str],
-                             assist_player: Optional[str],
-                             rebound_type: Optional[str],
-                             coordinate_x: Optional[float],
-                             coordinate_y: Optional[float],
-                             time_seconds: Optional[float]
+                           event_type: str,
+                           home_away: str,
+                           home_score: int,
+                           away_score: int,
+                           player_name: Optional[str],
+                           substituted_player_name: Optional[str],
+                           shot_type: Optional[str],
+                           assist_player: Optional[str],
+                           rebound_type: Optional[str],
+                           coordinate_x: Optional[float],
+                           coordinate_y: Optional[float],
+                           time_seconds: Optional[float]
         ) -> None:
         """Called whenever a basketball game event occurs.
         Parameters
@@ -224,43 +185,12 @@ class Strategy:
         time_seconds (Optional)
             Game time remaining in seconds
         """
-        if event_type and event_type != "END_GAME":
-            self.game_active = True
 
-        tick = {
-            # Base event data
-            "home_away": home_away if home_away is not None else "unknown",
-            "home_score": home_score,
-            "away_score": away_score,
-            "event_type": event_type,
-            "player_name": player_name,
-            "substituted_player_name": substituted_player_name,
-            "shot_type": shot_type,
-            "assist_player": assist_player,
-            "rebound_type": rebound_type,
-            "coordinate_x": coordinate_x,
-            "coordinate_y": coordinate_y,
-            "time_seconds": time_seconds,
-
-            # Market snapshot
-            "best_bid": self.best_bid,
-            "best_ask": self.best_ask,
-            "mid_price": self._mid(),
-            "spread": self._spread(),
-            "last_trade_price": self.last_trade_price,
-            "price": self._price_for_timestamp(),
-
-            # Account snapshot
-            "float": self.capital_remaining,
-            "position": self.position,
-        }
-        self._events.append(tick)
-        
+        print(f"{event_type} {home_score} - {away_score}")
 
         if event_type == "END_GAME":
             # IMPORTANT: Highly recommended to call reset_state() when the
             # game ends. See reset_state() for more details.
-            print(json.dumps(self._events, separators=(",", ":")), flush=True)
             self.reset_state()
             return
 
