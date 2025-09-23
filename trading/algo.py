@@ -75,6 +75,7 @@ class position:
     stake: float = 0.0
     curr_win_prob: float = 0.0
     curr_edge: float = 0.0
+    stop_curr_edge: float = 0.03
     stop_loss_position: float = 0.0
     time_of_exit: float = 0.0
     exit_price: float = 0.0
