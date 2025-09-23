@@ -121,6 +121,23 @@ class Strategy:
         """
         pass
 
+    def on_orderbook_snapshot(self, ticker: Ticker, bids: list, asks: list) -> None:
+        """Called periodically with a complete snapshot of the orderbook.
+
+        This provides the full current state of all bids and asks, useful for 
+        verification and algorithms that need the complete market picture.
+
+        Parameters
+        ----------
+        ticker
+            Ticker of the orderbook snapshot (Ticker.TEAM_A)
+        bids
+            List of (price, quantity) tuples for all current bids, sorted by price descending
+        asks  
+            List of (price, quantity) tuples for all current asks, sorted by price ascending
+        """
+        pass
+
     def on_account_update(
         self,
         ticker: Ticker,
