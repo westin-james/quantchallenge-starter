@@ -1,3 +1,0 @@
-How to run parse_game_log:
-python parse_game_log.py --input run.log --output game_001.json
-python parse_game_log.py -i run.log -o game_001_base.json --only-base-keys
