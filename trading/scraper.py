@@ -191,18 +191,18 @@ class Strategy:
         self.capital_remaining = capital_remaining
 
     def on_game_event_update(self,
-                           event_type: str,
-                           home_away: str,
-                           home_score: int,
-                           away_score: int,
-                           player_name: Optional[str],
-                           substituted_player_name: Optional[str],
-                           shot_type: Optional[str],
-                           assist_player: Optional[str],
-                           rebound_type: Optional[str],
-                           coordinate_x: Optional[float],
-                           coordinate_y: Optional[float],
-                           time_seconds: Optional[float]
+                             event_type: str,
+                             home_away: str,
+                             home_score: int,
+                             away_score: int,
+                             player_name: Optional[str],
+                             substituted_player_name: Optional[str],
+                             shot_type: Optional[str],
+                             assist_player: Optional[str],
+                             rebound_type: Optional[str],
+                             coordinate_x: Optional[float],
+                             coordinate_y: Optional[float],
+                             time_seconds: Optional[float]
         ) -> None:
         """Called whenever a basketball game event occurs.
         Parameters
@@ -233,7 +233,7 @@ class Strategy:
         if event_type and event_type != "END_GAME":
             self.game_active = True
 
-        tick = {
+        payload = {
             # Base event data
             "home_away": home_away if home_away is not None else "unknown",
             "home_score": home_score,
@@ -261,7 +261,7 @@ class Strategy:
             "position": self.position,
         }
 
-        print(json.dumps(tick, separators=(",", ":")))
+        print(json.dumps(payload, separators=(",", ":")))
 
         if event_type == "END_GAME":
             # IMPORTANT: Highly recommended to call reset_state() when the
