@@ -1,5 +1,10 @@
 from typing import Dict, Optional, List
 from dataclasses import dataclass
+from enum import Enum
+
+class Position_Status(Enum):
+    OPEN = "open"
+    CLOSED = "closed"
 
 @dataclass
 class CurrPlayerState:
@@ -60,6 +65,21 @@ class KellyCriterion:
     cap_percentage_total_capital: float = 0.3
     min_edge: float = 0.05
 
+@dataclass
+class position:
+    position_status: Position_Status.CLOSED
+    time_of_entry: int = 0
+    enter_price: float = 0.0
+    capital_at_entry: float = 0.0
+    win_prob_entry: float = 0.0
+    stake: float = 0.0
+    curr_win_prob: float = 0.0
+    curr_edge: float = 0.0
+    stop_loss_position: float = 0.0
+    time_of_exit: float = 0.0
+    exit_price: float = 0.0
+    realized_pnl: float = 0.0
+    capital_at_exit: float = 0.0
 
 def blend_ratings(player: CurrPlayerState) -> None:
     """
@@ -97,7 +117,7 @@ def update_lineup(lineup: List[CurrPlayerState], event: dict) -> None:
     Set the new lineup after a substitution, change currOverall,
     update ratings
     """
-    
+
 def update_average_possession_length(team: CurrGameState, new_possession_length: int) -> None:
     """
     Update average possesion length variable in CurrGameState
