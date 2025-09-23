@@ -42,14 +42,53 @@ class CurrTeamState:
     team_offensive_rating: float = 0.0
     team_defensive_rating: float = 0.0
     team_overall_rating: float = 0.0
+    curr_total_points: int = 0
+    expected_total_points: int = 0
+    num_possessions: int = 0
 
 @dataclass
 class CurrGameState:
     team_a_score: int = 0
     team_b_score: int = 0
     time_remeaning: int = 2000
+    num_possessions_completed: int = 0
+    average_possession_length: float = 0.0
+
+@dataclass
+class KellyCriterion:
+    fraction: float = 0.33
+    cap_percentage_total_capital: float = 0.3
+    min_edge: float = 0.05
 
 
+def update_average_possession_length(team: CurrGameState, new_possession_length: int) -> None:
+    """
+    Update average possesion length variable in CurrGameState
+    """ 
+
+def calculate_expected_remaining_possessions(team: CurrGameState, time_remaining: int) -> None:
+    """
+    Use the average posession length and time remaining to calculate
+    """
+
+def calculate_average_points_per_possessions(team: CurrGameState) -> int: 
+    """
+    Use the team points and possessions to calculate
+    """
+
+def calculate_expected_total_points() -> None:
+    """
+    Use remaining possessions and average points scored per drive
+    """
+
+def calculate_probability(expectedA: int, expectedB: int, differential = 12.0) -> float:
+    """
+    Use calculate expected total points to get them and pass them as parameters
+    Then, use standard deviation of 12 for nba game point differential
+    get z-score: expected / differential
+    get p = phi(z) = 0.5*(1+erf(z / sqrt(2)))
+    then return p
+    """
 
 
 def blend_ratings(player: CurrPlayerState) -> None:
