@@ -255,7 +255,7 @@ class Strategy:
                 team_avg_offense * (1 - blend_factor) +
                 player.real_offensive_rating * blend_factor
             )
-            player.blended_overall_rating = (
+            player.blended_defense_rating = (
                 50.0 * (1 - blend_factor) +
                 player.real_defensive_rating * blend_factor
             )
@@ -285,8 +285,10 @@ class Strategy:
 
         if player_out and player_out in team.active_lineup:
             team.active_lineup.append(player_in)
+            team.active_lineup.remove(player_out)
             player_obj = self._get_or_create_player(team, player_in)
             player_obj.on_floor = True
+            
     
     def is_possession_ending_event(self, event_type: str) -> bool:
         return event_type in ['SCORE', 'REBOUND', 'TURNOVER']
@@ -329,7 +331,7 @@ class Strategy:
     
     def calculate_current_edge(self) -> float:
         win_prob = self._calculate_win_probability()
-        market_price = self._mid
+        market_price = self._mid()
         if market_price is None:
             market_price = self.last_trade_price
         if market_price is None:
@@ -347,7 +349,7 @@ class Strategy:
         if self.game_state.time_remaining < 250:
             return True
         
-        current_edge = self.calculate_current_edge
+        current_edge = self.calculate_current_edge()
 
         if self.curr_position.side_of_entry == Side.BUY and current_edge < -0.05:
             return True
@@ -424,7 +426,7 @@ class Strategy:
                 quantity = min(abs(position_change), self.capital_remaining / trade_price)
                 if quantity >= 1.0:
                     place_market_order(Side.BUY, Ticker.TEAM_A, quantity)
-                    self.update_curr_position_on_order(Side.SELL, quantity, trade_price)
+                    self.update_curr_position_on_order(Side.BUY, quantity, trade_price)
                     self.last_trade_time = current_time
         else:
             trade_price = self._get_tradeable_price(Side.SELL)
