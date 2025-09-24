@@ -33,8 +33,8 @@ def cancel_order(ticker: Ticker, order_id: int) -> bool:
 @dataclass
 class CurrPlayerState:
     player_id: str
-    two_pt_attempts: int = 0.0
-    two_pt_makes: int = 0.0
+    two_pt_attempts: int = 0
+    two_pt_makes: int = 0
 
     real_offense: float = 0.0
     real_defense: float = 50.0
@@ -534,6 +534,7 @@ class Strategy:
                     self._update_player_stats(player, event)
                     self.compute_offensive_rating(player)
                     self.compute_defensive_rating(player)
+                    self._blend_ratings(player, team.team_offensive_rating)
 
         self._update_possession_tracking(event)
 
