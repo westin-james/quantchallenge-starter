@@ -1,4 +1,3 @@
-@ -1,57 +0,0 @@
 import sys
 import json
 import argparse
