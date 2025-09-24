@@ -535,6 +535,7 @@ class Strategy:
                     self.compute_offensive_rating(player)
                     self.compute_defensive_rating(player)
                     self._blend_ratings(player, team.team_offensive_rating)
+            self._update_team_ratings(team)
 
         self._update_possession_tracking(event)
 
