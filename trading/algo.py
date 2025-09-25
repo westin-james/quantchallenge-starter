@@ -449,7 +449,7 @@ class Strategy:
 
     def calculate_current_edge(self) -> float:
         win_prob = self._calculate_win_probability()
-        market_price = self.mid()
+        market_price = self._mid()
         if market_price is None:
             market_price = self.last_trade_price
         if market_price is None:
