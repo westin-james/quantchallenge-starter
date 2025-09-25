@@ -143,6 +143,8 @@ class Strategy:
         self.min_trade_interval: float = 5.0
 
         self.curr_position = Position()
+        # endgame helpers (no-OT locks)
+        self.last_endgame_action_tick = None
 
     def __init__(self) -> None:
         """Initialize strategy"""
@@ -165,6 +167,8 @@ class Strategy:
         self.min_trade_interval: float = 5.0
 
         self.curr_position = Position()
+        # endgame helpers
+        self.last_endgame_action_tick = None
         
     def _recompute_bbo(self) -> None:
             """Recompute best bid and offer"""
@@ -329,9 +333,123 @@ class Strategy:
         """Check if enough time has passed since last trade"""
         return (current_time - self.last_trade_time) >= self.min_trade_interval
     
+    # ---------- Endgame Lock for no OT helpers -----
+    def _is_endgame_lock(self):
+        """
+        Returns (is_lock: bool, true_home_prob: float or None, reason: str)
+        Implements rules for final 35s, using existing game fields only.
+        """
+        t = self.game_state.time_remaining or 0.0
+        if t > 35.0:
+            return False, None, ""
+        
+        lead = self.game_state.home_score - self.game_state.away_score
+        abs_lead = abs(lead)
+
+        # possessions estimate from existing avg possession length (fallback ~14s)
+        avg_len = self.game_state.average_possession_length or 14.0
+        avg_len = max(8.0, min(avg_len, 20.0)) #keep it sane in crunch time
+        poss_floor = math.floor((t / avg_len) + 1e-9)
+
+        def home_prob_from_leader(p_leader: float) -> float:
+            return p_leader if lead >= 0 else (1.0 - p_leader)
+        
+        # under 5 seconds
+        if t <= 5.0:
+            if abs_lead >= 4:
+                return True, home_prob_from_leader(1.0), "<=5s & lead >=4 (no 4-pt plays)"
+            if abs_lead == 3:
+                return True, home_prob_from_leader(0.995), "<=5s & lead=3"
+            if abs_lead == 2:
+                return True, home_prob_from_leader(0.98), "<=5s & lead=2"
+            
+        # 6-10s
+        if 6.0 <= t <= 10.0:
+            if abs_lead >= 6:
+                return True, home_prob_from_leader(0.999), "6-10s & lead>=6"
+            if abs_lead >= 4 and poss_floor < 2:
+                return True, home_prob_from_leader(0.995), "6-10s & lead>=4 & <2 poss"
+        
+        # <=24s
+        if t <= 24.0:
+            if abs_lead >= 7:
+                return True, home_prob_from_leader(0.9995), "<=24s & lead>=7"
+            if abs_lead >= 5 and poss_floor <= 1:
+                return True, home_prob_from_leader(0.99), "<=24s & lead>=5 & <=1 poss"
+            
+        # <=35s
+        if t <= 35.0:
+            if abs_lead >= 9:
+                return True, home_prob_from_leader(0.9995), "<=35s & lead>=9"
+            if abs_lead >= 6 and poss_floor < 3:
+                return True, home_prob_from_leader(0.995), "<=35s & lead>=6 & <3 poss"
+            
+        return False, None, ""
+    
+    def _execute_endgame_strategy(self, true_home_prob: float, reason: str) -> bool:
+        """
+        Aggressive allocation based on 10/20/30%+ edge -> 40/60/80% of capital.
+        Uses existing orders helpers and state; no kelly.
+        """
+        #throttle: once per game-second
+        tick = int(self.game_state.time_remaining or 0)
+        if self.last_endgame_action_tick == tick:
+            return False
+        
+        market_price = self._mid()
+        if market_price is None:
+            market_price = self.last_trade_price
+        if market_price is None or self.capital_remaining <= 0:
+            return False
+        
+        market_prob = min(max(market_price / 100.0, 1e-6), 1 - 1e-6)
+        edge = abs(true_home_prob - market_prob)
+        if edge < 0.10:
+            return False
+        
+        if edge >= 0.30:
+            alloc = 0.80
+        elif edge >= 0.20:
+            alloc = 0.60
+        else:
+            alloc = 0.40
+
+        desired_side = Side.BUY if true_home_prob > market_prob else Side.SELL
+        trade_price = self._get_tradeable_price(desired_side)
+        if trade_price is None:
+            trade_price = market_price # graceful fallback if book side missing
+
+        # flip if needed
+        if self.curr_position.curr_active and self.curr_position.side_of_entry != desired_side:
+            self.execute_close_position()
+
+        if desired_side == Side.BUY:
+            qty = (alloc * self.capital_remaining) / max(trade_price, 1e-6)
+        else:
+            qty = (alloc * self.capital_remaining) / max(100.0 - trade_price, 1e-6)
+        if qty < 1.0:
+            return False
+        
+        place_market_order(desired_side, Ticker.TEAM_A, qty)
+        self.update_curr_position_on_order(desired_side, qty, trade_price)
+        self.last_endgame_action_tick = tick
+
+        print(f"[ENDGAME-LOCK] t={self.game_state.time_remaining:.2f}s "
+              f"lead={self.game_state.home_score - self.game_state.away_score} "
+              f"edge={(edge*100):.1f}% side={desired_side.name} qty={qty:.2f} px={trade_price:.2f} "
+              f"alloc={int(alloc*100)}%")
+        return True
+    
+    def _maybe_apply_endgame_lock(self) -> bool:
+        """Detect & act; True if an order was placed."""
+        is_lock, p_true, reason = self._is_endgame_lock()
+        if not is_lock or p_true is None:
+            return False
+        return self._execute_endgame_strategy(p_true, reason)
+
     def calculate_current_edge(self) -> float:
         win_prob = self._calculate_win_probability()
-        market_price = self._mid()
+        market_price = self.mid()
         if market_price is None:
             market_price = self.last_trade_price
         if market_price is None:
@@ -392,6 +510,11 @@ class Strategy:
 
     def _execute_trading_decision(self, win_prob: float, current_time: float) -> None:
         """Execute trading decision based on calculated probabilities"""
+
+        #new addition: allow endgame lock to run even when < 500s
+        if self._maybe_apply_endgame_lock():
+            return
+
         if self.game_state.time_remaining > 1500 or self.game_state.time_remaining < 500:
             return
         
