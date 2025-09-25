@@ -198,6 +198,14 @@ class Strategy:
                     real_defense=50.0
                 )
             return team.roster[player_name]
+    
+    def _ensure_player_on_floor(self, team: CurrTeamState, player_name: Optional[str]) -> None:
+        if not team or not player_name:
+            return
+        p = self._get_or_create_player(team, player_name)
+        p.on_floor = True
+        if player_name not in team.active_lineup:
+            team.active_lineup.append(player_name)
 
     def _update_player_stats(self, player: CurrPlayerState, event: dict) -> None:
             """Update player statistics from event"""
@@ -287,11 +295,14 @@ class Strategy:
         player_in = event.get('player_name')
         player_out = event.get('substituted_player_name')
 
-        if player_out and player_out in team.active_lineup:
-            team.active_lineup.append(player_in)
-            team.active_lineup.remove(player_out)
-            player_obj = self._get_or_create_player(team, player_in)
-            player_obj.on_floor = True
+        if player_in:
+            self._ensure_player_on_floor(team, player_in)
+
+        if player_out:
+            if player_out in team.active_lineup:
+                team.active_lineup.remove(player_out)
+            if player_out in team.roster:
+                team.roster[player_out].on_floor = False
             
     
     def is_possession_ending_event(self, event_type: str) -> bool:
@@ -650,6 +661,18 @@ class Strategy:
                 player_obj = self._get_or_create_player(target_team, player_name)
                 player_obj.on_floor = True
 
+        if event_type == "SUBSTITUTION" and target_team:
+            self._handle_substitution(target_team, event)
+
+        action_events = {"SCORE", "MISSED", "REBOUND", "STEAL", "BLOCK", "TURNOVER", "FOUL"}
+        if target_team and event_type in action_events:
+            if player_name:
+                self._ensure_player_on_floor(target_team, player_name)
+            if assist_player:
+                self._ensure_player_on_floor(target_team, assist_player)
+        
+                         
+
         for team in [self.home_team, self.away_team]:
             for player_id in team.active_lineup:
                 if player_id in team.roster:
@@ -715,47 +738,3 @@ class Strategy:
         player.real_defensive_rating = max(0.0, min(100.0, base + positive- negative))
 
         
-
-
-
-    # def compute_overall_rating(self, player: CurrPlayerState) -> None:
-    #     """
-    #     Use Updated off/def to recalculate the overall rating of
-    #     a player
-    #     """
-
-    # def update_lineup(self, lineup: List[CurrPlayerState], event: dict) -> None:
-    #     """
-    #     Set the new lineup after a substitution, change currOverall,
-    #     update ratings
-    #     """
-
-    # def update_average_possession_length(self, team: CurrGameState, new_possession_length: int) -> None:
-    #     """
-    #     Update average possesion length variable in CurrGameState
-    #     """ 
-
-    # def calculate_expected_remaining_possessions(self, team: CurrGameState, time_remaining: int) -> None:
-    #     """
-    #     Use the average posession length and time remaining to calculate
-    #     """
-
-    # def calculate_average_points_per_possessions(self, team: CurrGameState) -> int: 
-    #     """
-    #     Use the team points and possessions to calculate
-    #     """
-
-    # def calculate_expected_total_points() -> None:
-    #     """
-    #     Use remaining possessions and average points scored per drive
-    #     """
-
-    # def calculate_probability(expectedA: int, expectedB: int, differential = 12.0) -> float:
-    #     """
-    #     Use calculate expected total points to get them and pass them as parameters
-    #     Then, use standard deviation of 12 for nba game point differential
-    #     get z-score: expected / differential
-    #     get p = phi(z) = 0.5*(1+erf(z / sqrt(2)))
-    #     then return p
-    #     """
-
