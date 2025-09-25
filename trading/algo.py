@@ -392,7 +392,7 @@ class Strategy:
 
     def _execute_trading_decision(self, win_prob: float, current_time: float) -> None:
         """Execute trading decision based on calculated probabilities"""
-        if self.game_state.time_remaining > 1500 or self.game_state.time_remaining < 500:
+        if self.game_state.time_remaining > 2160 or self.game_state.time_remaining < 240:
             return
         
         if not self._enough_time_elapsed_to_make_new_trade(current_time):
