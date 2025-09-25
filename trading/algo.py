@@ -324,10 +324,10 @@ class Strategy:
         expected_away = self.game_state.away_score + (remaining_possessions * away_ppp)
 
         point_diff = expected_home - expected_away
-        z_score = point_diff / 12.0
+        z_score = point_diff / 10.0
         probability = 0.5 * (1 + math.erf(z_score / math.sqrt(2)))
 
-        return max(0.01, min(0.99, probability))
+        return max(0.005, min(0.995, probability))
 
     def _enough_time_elapsed_to_make_new_trade(self, current_time: float) -> bool:
         """Check if enough time has passed since last trade"""
