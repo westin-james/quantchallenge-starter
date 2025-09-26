@@ -105,7 +105,7 @@ class CurrGameState:
     num_possessions_completed: int = 0
     average_possession_length: float = 0.0
     last_possession_start: float = 0
-    possesions_seen: int = 0
+    possessions_seen: int = 0
 
 @dataclass
 class KellyCriterion:
@@ -170,7 +170,7 @@ class Strategy:
         self.peak_edge_abs_since_entry = 0.0
         self.scale_out_stage = 0
         # endgame helpers (no-OT locks)
-        self.initalize_orderbook()
+        self._initalize_orderbook()
 
     def __init__(self) -> None:
         """Initialize strategy"""
@@ -203,9 +203,9 @@ class Strategy:
         self.micro_edge_team: str = ""
         self.micro_edge_event_type: str = ""
         self.micro_edge_position_size: float = 0.0
-        self.micro_edge_entry_possesion: int = 0
+        self.micro_edge_entry_possession: int = 0
         self.MICRO_EDGE_SIZE_PCT = 0.02
-        self.MICRO_EDGE_MIN_THRESHORD = 0.06
+        self.MICRO_EDGE_MIN_THRESHOLD = 0.06
         self.MICRO_EDGE_STEAL_BOOST = 0.07
         self.MICRO_EDGE_ORB_BOOST = 0.04
 
@@ -217,8 +217,8 @@ class Strategy:
             self.bids[float(price)] = 10000.0
             self.asks[float(price)] = 10000.0
 
-            self._recompute_bbo()
-            self.last_trade_price = 50.0
+        self._recompute_bbo()
+        self.last_trade_price = 50.0
 
     def _recompute_bbo(self) -> None:
             """Recompute best bid and offer"""
@@ -258,39 +258,40 @@ class Strategy:
     #         team.active_lineup.append(player_name)
 
     def _update_team_box_scores(self, event: dict) -> None:
-            """Update player statistics from event"""
-            event_type = event.get('event_type')
-            shot_type = event.get('shot_type')
-            rebound_type = event.get('rebound_type')
-            home_away = event.get('home_away')
-            team = self.home_team if home_away == 'home' else self.away_team if home_away == 'away' else None
-            opp = self.away_team if home_away == 'home' else self.home_team if home_away == 'away' else None
-            if team is None:
-                if event_type == 'SCORE':
-                    if shot_type == 'THREE_POINT':
-                        team.tpm += 1
-                        team.fgm += 1
-                        team.fga += 1
-                    elif shot_type in ['TWO_POINT', 'LAYUP', 'DUNK']:
-                        team.fgm += 1
-                        team.fga += 1
-                    elif shot_type == 'FREE_THROW':
-                        team.fta += 1
-                elif event_type == 'MISSED':
-                    if shot_type == ['THREE_POINT','TWO_POINT', 'LAYUP', 'DUNK']:
-                        team.fgm += 1
-                        team.fga += 1
-                    elif shot_type == 'FREE_THROW':
-                        team.fta += 1
-                elif event_type == 'TURNOVER':
-                    team.tov += 1
-                elif event_type == 'REBOUND':
-                    if rebound_type == 'OFFENSIVE':
-                        team.orb += 1
-                    else:
-                        team.drb += 1
-                elif event_type == 'FOUL':
-                    team.fouls += 1
+        """Update player statistics from event"""
+        event_type = event.get('event_type')
+        shot_type = event.get('shot_type')
+        rebound_type = event.get('rebound_type')
+        home_away = event.get('home_away')
+        team = self.home_team if home_away == 'home' else self.away_team if home_away == 'away' else None
+        opp = self.away_team if home_away == 'home' else self.home_team if home_away == 'away' else None
+        if team is None:
+            return
+        
+        if event_type == 'SCORE':
+            if shot_type == 'THREE_POINT':
+                team.tpm += 1
+                team.fgm += 1
+                team.fga += 1
+            elif shot_type in ['TWO_POINT', 'LAYUP', 'DUNK']:
+                team.fgm += 1
+                team.fga += 1
+            elif shot_type == 'FREE_THROW':
+                team.fta += 1
+        elif event_type == 'MISSED':
+            if shot_type in ['THREE_POINT','TWO_POINT', 'LAYUP', 'DUNK']:
+                team.fga += 1
+            elif shot_type == 'FREE_THROW':
+                team.fta += 1
+        elif event_type == 'TURNOVER':
+            team.tov += 1
+        elif event_type == 'REBOUND':
+            if rebound_type == 'OFFENSIVE':
+                team.orb += 1
+            else:
+                team.drb += 1
+        elif event_type == 'FOUL':
+            team.fouls += 1
 
     def _recompute_four_factors_and_team_weight(self) -> None:
         def compute_four_factors(team: CurrTeamState, opp: CurrTeamState) -> None:
@@ -388,7 +389,7 @@ class Strategy:
                 self.game_state.num_possessions_completed += 1
                 self.game_state.average_possession_length = (total_time + possession_length) / self.game_state.num_possessions_completed
 
-                self.game_state.possesions_seen += 1
+                self.game_state.possessions_seen += 1
 
                 self.game_state.last_possession_start = current_time
 
@@ -417,8 +418,8 @@ class Strategy:
 
         kappa = 1.0
         n0 = 30.0
-        possesions = max(self.game_state.possesions_seen, 0)
-        lam = kappa * (possesions / (possesions + n0))
+        possessions = max(self.game_state.possessions_seen, 0)
+        lam = kappa * (possessions / (possessions + n0))
 
         tw_edge = max(min(tw_edge, 0.10), -0.10)
 
@@ -470,7 +471,9 @@ class Strategy:
 
     def calculate_current_edge(self) -> float:
         win_prob = self._calculate_win_probability()
-        market_price = self.last_trade_price if self.last_trade_price is not None else self.mid()
+        market_price = self.last_trade_price if self.last_trade_price is not None else self._mid()
+        if market_price is None:
+            return 0.0
         
         market_prob = market_price / 100.00
         market_prob = min(max(market_prob, 1e-9), 1 - 1e-9)
@@ -478,7 +481,7 @@ class Strategy:
         return edge
         
     def should_close_position(self) -> bool:
-        if  self.curr_position == 0.0:
+        if  self.position == 0.0:
             return False
         
         if self.game_state.time_remaining <= 200:
@@ -603,7 +606,7 @@ class Strategy:
                         self.last_trade_time = current_time
                 self.scale_out_stage = 2
             elif self.scale_out_stage < 1:
-                desired = 0.72 * self.position
+                desired = 0.75 * self.position
                 reduce_qty = abs(self.position - desired)
                 if reduce_qty >= 0.1:
                     side = Side.SELL if self.position > 0 else Side.BUY
@@ -678,61 +681,61 @@ class Strategy:
             book[price] = quantity
         self._recompute_bbo()
 
-        def _handle_event_sequence_micro_edge(self, event: dict) -> None:
-            event_type = event.get('event_type')
-            home_away = event.get('home_away')
-            time_seconds = event.get('time_seconds')
+    def _handle_event_sequence_micro_edge(self, event: dict) -> None:
+        event_type = event.get('event_type')
+        home_away = event.get('home_away')
+        time_seconds = event.get('time_seconds')
 
-            if self.micro_edge_active:
-                should_exit = False
+        if self.micro_edge_active:
+            should_exit = False
 
-                if event_type == 'SCORE':
-                    should_exit = True
-                elif event_type == 'TURNOVER':
-                    should_exit = True
-                elif event_type == 'REBOUND' and event.get('rebound_type') == 'DEFENSIVE':
-                    should_exit = True
-                elif self.game_state.num_possesions_completed > self.micro_edge_entry_possesion + 1:
-                    should_exit = True
+            if event_type == 'SCORE':
+                should_exit = True
+            elif event_type == 'TURNOVER':
+                should_exit = True
+            elif event_type == 'REBOUND' and event.get('rebound_type') == 'DEFENSIVE':
+                should_exit = True
+            elif self.game_state.num_possessions_completed > self.micro_edge_entry_possesion + 1:
+                should_exit = True
 
-                if should_exit:
-                    self._exit_micro_edge_position()
-                    return
+            if should_exit:
+                self._exit_micro_edge_position()
+                return
                 
-            if not self.micro_edge_active and time_seconds is not None:
-                if 200 <= time_seconds <= 1800:
-                    if event_type == 'STEAL' or (event_type == 'REBOUND' and event.get('rebound_type') == 'OFFENSIVE'):
-                        if event_type == 'STEAL':
-                            benefiting_team = home_away
-                            prob_boost = self.MICRO_EDGE_STEAL_BOOST
-                        else:
-                            benefiting_team = home_away
-                            prob_boost = self.MICRO_EDGE_ORB_BOOST
-                        
-                        if benefiting_team not in ['home', 'away']:
-                            return
-                        
-                        base_prob = self._calculate_win_probability()
+        if not self.micro_edge_active and time_seconds is not None:
+            if 200 <= time_seconds <= 1800:
+                if event_type == 'STEAL' or (event_type == 'REBOUND' and event.get('rebound_type') == 'OFFENSIVE'):
+                    if event_type == 'STEAL':
+                        benefiting_team = home_away
+                        prob_boost = self.MICRO_EDGE_STEAL_BOOST
+                    else:
+                        benefiting_team = home_away
+                        prob_boost = self.MICRO_EDGE_ORB_BOOST
+                    
+                    if benefiting_team not in ['home', 'away']:
+                        return
+                    
+                    base_prob = self._calculate_win_probability()
 
-                        if benefiting_team == 'None':
-                            boosted_prob = min(base_prob + prob_boost, 0.99)
-                        else:
-                            boosted_prob = max(base_prob + prob_boost, 0.01)
-                        
-                        market_price = self.last_trade_price if self.last_trade_price is not None else self._mid()
-                        if market_price is None:
-                            return
-                        
-                        market_prob = market_price / 100.0
-                        micro_edge = boosted_prob - market_prob
+                    if benefiting_team == 'home':
+                        boosted_prob = min(base_prob + prob_boost, 0.99)
+                    else:
+                        boosted_prob = max(base_prob - prob_boost, 0.01)
+                    
+                    market_price = self.last_trade_price if self.last_trade_price is not None else self._mid()
+                    if market_price is None:
+                        return
+                    
+                    market_prob = market_price / 100.0
+                    micro_edge = boosted_prob - market_prob
 
-                        if abs(micro_edge) >= self.MICRO_EDGE_MIN_THRESHOLD:
-                            self._enter_micro_edge_position(
-                                benefiting_team=benefiting_team,
-                                edge=micro_edge,
-                                event_type=event_type,
-                                time_seconds=time_seconds
-                            )
+                    if abs(micro_edge) >= self.MICRO_EDGE_MIN_THRESHOLD:
+                        self._enter_micro_edge_position(
+                            benefiting_team=benefiting_team,
+                            edge=micro_edge,
+                            event_type=event_type,
+                            time_seconds=time_seconds
+                        )
 
     def _enter_micro_edge_position(self, benefiting_team: str, edge: float, event_type: str, time_seconds: float) -> None:
         position_capital = self.capital_remaining * self.MICRO_EDGE_SIZE_PCT
@@ -763,10 +766,10 @@ class Strategy:
         self.micro_edge_entry_possesion = self.game_state.num_possessions_completed
 
     def _exit_micro_edge_position(self) -> None:
-        if not self.micro_edge_active or self.micro_edge_position_size == 0.0:
+        if not self.micro_edge_active or self.micro_edge_position_size == 0:
             return
 
-        if self.micro_edge_active or self.micro_edge_position_size == 0:
+        if not self.micro_edge_active or self.micro_edge_position_size == 0:
             return
         
         if self.micro_edge_position_size > 0:
@@ -794,121 +797,122 @@ class Strategy:
 
             # ---------- Endgame Lock for no OT helpers -----
         def home_prob_from_leader(p_leader: float) -> float:
-            # under 5 seconds
-            if t <= 5.0:
-                if abs_lead >= 4:
-                    return True, home_prob_from_leader(1.0), "<=5s & lead >=4 (no 4-pt plays)"
-                if abs_lead == 3:
-                    return True, home_prob_from_leader(0.995), "<=5s & lead=3"
-                if abs_lead == 2:
-                    return True, home_prob_from_leader(0.98), "<=5s & lead=2"
-                
-            # 6-10s
-            if 6.0 <= t <= 10.0:
-                if abs_lead >= 6:
-                    return True, home_prob_from_leader(0.999), "6-10s & lead>=6"
-                if abs_lead >= 4:
-                    return True, home_prob_from_leader(0.995), "6-10s & lead>=4 & <2 poss"
+            return p_leader if lead >= 0 else (1.0 - p_leader)
+        # under 5 seconds
+        if t <= 5.0:
+            if abs_lead >= 4:
+                return True, home_prob_from_leader(1.0), "<=5s & lead >=4 (no 4-pt plays)"
+            if abs_lead == 3:
+                return True, home_prob_from_leader(0.995), "<=5s & lead=3"
+            if abs_lead == 2:
+                return True, home_prob_from_leader(0.98), "<=5s & lead=2"
             
-            # <=24s
-            if t <= 24.0:
-                if abs_lead >= 9:
-                    return True, home_prob_from_leader(0.9995), "<=24s & lead>=7"
-                
-            # <=35s
-            if t <= 35.0:
-                if abs_lead >= 10:
-                    return True, home_prob_from_leader(0.9995), "<=35s & lead>=9"
-            return False, None, ""
+        # 6-10s
+        if 6.0 <= t <= 10.0:
+            if abs_lead >= 6:
+                return True, home_prob_from_leader(0.999), "6-10s & lead>=6"
+            if abs_lead >= 4:
+                return True, home_prob_from_leader(0.995), "6-10s & lead>=4 & <2 poss"
         
-        def _execute_endgame_strategy(self, true_home_prob: float, reason: str) -> bool:
+        # <=24s
+        if t <= 24.0:
+            if abs_lead >= 9:
+                return True, home_prob_from_leader(0.9995), "<=24s & lead>=7"
             
-            desired_side = Side.BUY if true_home_prob > 0.5 else Side.SELL
+        # <=35s
+        if t <= 35.0:
+            if abs_lead >= 10:
+                return True, home_prob_from_leader(0.9995), "<=35s & lead>=9"
+        return False, None, ""
+        
+    def _execute_endgame_strategy(self, true_home_prob: float, reason: str) -> bool:
+        
+        desired_side = Side.BUY if true_home_prob > 0.5 else Side.SELL
 
-            market_price = self._mid()
-            if market_price is None:
-                market_price = self.last_trade_price
-            if market_price is None:
-                return False
-            
-            if true_home_prob >= 0.999 or true_home_prob <= 0.001:
-                target_alloc = 0.80
-            elif true_home_prob >= 0.995 or true_home_prob <= 0.005:
-                target_alloc = 0.60
-            elif true_home_prob >= 0.98 or true_home_prob <= 0.02:
-                target_alloc = 0.40
+        market_price = self._mid()
+        if market_price is None:
+            market_price = self.last_trade_price
+        if market_price is None:
+            return False
+        
+        if true_home_prob >= 0.999 or true_home_prob <= 0.001:
+            target_alloc = 0.80
+        elif true_home_prob >= 0.995 or true_home_prob <= 0.005:
+            target_alloc = 0.60
+        elif true_home_prob >= 0.98 or true_home_prob <= 0.02:
+            target_alloc = 0.40
+        else:
+            return False
+        
+        trade_price = self._get_tradeable_price(desired_side)
+        if trade_price is None:
+            trade_price = market_price
+
+        current_alloc = 0.0
+        if self.curr_position.curr_active:
+            if self.curr_position.side_of_entry != desired_side:
+                current_alloc = -1.0 * (self.curr_position.cost_of_position / (self.capital_remaining + self.curr_position.cost_of_position))
             else:
-                return False
-            
-            trade_price = self._get_tradeable_price(desired_side)
-            if trade_price is None:
-                trade_price = market_price
+                current_alloc = self.curr_psoition.cost_of_position / (self.capital_remaining + self.curr_position.cost_of_position)
 
+
+        alloc_change = target_alloc - current_alloc
+
+        if abs(alloc_change) < 0.05:
+            return False
+        
+        if current_alloc < 0:
+            self.execute_close_position()
             current_alloc = 0.0
-            if self.curr_position.curr_active:
-                if self.curr_position.side_of_entry != desired_side:
-                    current_alloc = -1.0 * (self.curr_position.cost_of_position / (self.capital_remaining + self.curr_position.cost_of_position))
-                else:
-                    current_alloc = self.curr_psoition.cost_of_position / (self.capital_remaining + self.curr_position.cost_of_position)
+            alloc_change = target_alloc
 
+        total_capital = self.capital_remaining
+        if self.curr_position.curr_active and self.curr_position.side_of_entry == desired_side:
+            total_capital = self.capital_remaining + self.curr_position.cost_of_position
 
-            alloc_change = target_alloc - current_alloc
+        if alloc_change > 0:
+            additional_capital_needed = alloc_change * total_capital
+            if desired_side == Side.BUY:
+                qty = additional_capital_needed / max(trade_price, 1e-6)
+            else:
+                qty = additional_capital_needed / max(100.0 - trade_price, 1e-6)
 
-            if abs(alloc_change) < 0.05:
+            if desired_side == Side.BUY:
+                max_qty = self.capital_remaining / max(trade_price, 1e-6)
+            else:
+                max_qty = self.capital_remaining / max(100.0 - trade_price, 1e-6)
+
+            qty = min(qty, max_qty)
+
+            if qty < 1.0:
                 return False
             
-            if current_alloc < 0:
-                self.execute_close_position()
-                current_alloc = 0.0
-                alloc_change = target_alloc
-
-            total_capital = self.capital_remaining
-            if self.curr_position.curr_active and self.curr_position.side_of_entry == desired_side:
-                total_capital = self.capital_remaining + self.curr_position.cost_of_position
-
-            if alloc_change > 0:
-                additional_capital_needed = alloc_change * total_capital
-                if desired_side == Side.BUY:
-                    qty = additional_capital_needed / max(trade_price, 1e-6)
-                else:
-                    qty = additional_capital_needed / max(100.0 - trade_price, 1e-6)
-
-                if desired_side == Side.BUY:
-                    max_qty = self.capital_remaining / max(trade_price, 1e-6)
-                else:
-                    max_qty = self.capital_remaining / max(100.0 - trade_price, 1e-6)
-
-                qty = min(qty, max_qty)
-
-                if qty < 1.0:
-                    return False
-                
-                if self.curr_position.curr_active:
-                    self.curr_position.quantity_of_position_purchased += qty
-                    self.curr_position.cost_of_position += qty * trade_price
-                else:
-                    self.update_curr_posiiton_on_order(desired_side, qty, trade_price)
+            if self.curr_position.curr_active:
+                self.curr_position.quantity_of_position_purchased += qty
+                self.curr_position.cost_of_position += qty * trade_price
             else:
-                reduction_capital = abs(alloc_change) * total_capital
-                if desired_side == Side.BUY:
-                    qty_to_reduce = reduction_capital / max(trade_price, 1e-6)
-                else:
-                    qty_to_reduce = reduction_capital / max(100.0 - trade_price, 1e-6)
+                self.update_curr_posiiton_on_order(desired_side, qty, trade_price)
+        else:
+            reduction_capital = abs(alloc_change) * total_capital
+            if desired_side == Side.BUY:
+                qty_to_reduce = reduction_capital / max(trade_price, 1e-6)
+            else:
+                qty_to_reduce = reduction_capital / max(100.0 - trade_price, 1e-6)
 
-                qty_to_reduce = min(qty_to_reduce, self.curr_position.quantity_of_position_purchased)
+            qty_to_reduce = min(qty_to_reduce, self.curr_position.quantity_of_position_purchased)
 
-                if qty_to_reduce < 1.0:
-                    return False
-                
-                opposite_side = Side.SELL if desired_side == Side.BUY else Side.BUY
-                place_market_order(opposite_side, Ticker.TEAM_A, qty_to_reduce)
-
-                self.curr_position.cost_of_position -= qty_to_reduce * trade_price
-
-                if self.curr_position.quantity_of_position_purchased < 1.0:
-                    self.reset_curr_position()
+            if qty_to_reduce < 1.0:
+                return False
             
-            return True
+            opposite_side = Side.SELL if desired_side == Side.BUY else Side.BUY
+            place_market_order(opposite_side, Ticker.TEAM_A, qty_to_reduce)
+
+            self.curr_position.cost_of_position -= qty_to_reduce * trade_price
+
+            if self.curr_position.quantity_of_position_purchased < 1.0:
+                self.reset_curr_position()
+        
+        return True
 
     def _maybe_apply_endgame_lock(self) -> bool:
         """Detect & act; True if an order was placed."""
