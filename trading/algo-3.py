@@ -380,81 +380,81 @@ class Strategy:
             self.execute_close_position()
             return
         
-        if self.game_state.time_remaining > 1800 or self.game_state.time_remaining < 200:
-            return
+        # if self.game_state.time_remaining > 1800 or self.game_state.time_remaining < 200:
+        #     return
         
-        price_ref = self.last_trade_price if self.last_trade_price is not None else self._mid()
-        if price_ref is None or self.capital_remaining is None:
-            return
+        # price_ref = self.last_trade_price if self.last_trade_price is not None else self._mid()
+        # if price_ref is None or self.capital_remaining is None:
+        #     return
         
-        market_prob = price_ref / 100.0
-        market_prob = min(max(market_prob, 1e-9), 1 - 1e-9)
-        model_edge = win_prob - market_prob
+        # market_prob = price_ref / 100.0
+        # market_prob = min(max(market_prob, 1e-9), 1 - 1e-9)
+        # model_edge = win_prob - market_prob
 
-        slippage_bps = 0.002
-        effective_edge = model_edge - slippage_bps if model_edge > 0 else model_edge + slippage_bps
+        # slippage_bps = 0.002
+        # effective_edge = model_edge - slippage_bps if model_edge > 0 else model_edge + slippage_bps
 
-        entry_threshold = 0.05
-        if abs(effective_edge) < entry_threshold:
-            return
+        # entry_threshold = 0.05
+        # if abs(effective_edge) < entry_threshold:
+        #     return
         
-        kelly_fraction = self.kelly.kelly_fraction(win_prob, price_ref)
-        if abs(kelly_fraction) < 0.01:
-            return
+        # kelly_fraction = self.kelly.kelly_fraction(win_prob, price_ref)
+        # if abs(kelly_fraction) < 0.01:
+        #     return
         
-        target_units = self.kelly.target_units(self.capital_remaining, price_ref, kelly_fraction)
-        curr_edge_abs = abs(model_edge)
-        if curr_edge_abs > self.peak_edge_abs_since_entry:
-            self.peak_edge_abs_since_entry = curr_edge_abs
+        # target_units = self.kelly.target_units(self.capital_remaining, price_ref, kelly_fraction)
+        # curr_edge_abs = abs(model_edge)
+        # if curr_edge_abs > self.peak_edge_abs_since_entry:
+        #     self.peak_edge_abs_since_entry = curr_edge_abs
 
-        drop = self.peak_edge_abs_since_entry - curr_edge_abs
-        if self.position != 0.0 and drop >= 0.02:
-            if curr_edge_abs < 0.02:
-                self.execute_close_position()
-                return
+        # drop = self.peak_edge_abs_since_entry - curr_edge_abs
+        # if self.position != 0.0 and drop >= 0.02:
+        #     if curr_edge_abs < 0.02:
+        #         self.execute_close_position()
+        #         return
             
-            elif curr_edge_abs < 0.03 and self.scale_out_stage < 2:
-                desired = 0.5 * self.position
-                reduce_qty = abs(self.position - desired)
-                if reduce_qty >= 0.1:
-                    side = Side.SELL if self.position > 0 else Side.BUY
-                    trade_price = self._get_tradeable_price(side)
-                    if trade_price is not None:
-                        place_market_order(side, Ticker.TEAM_A, reduce_qty)
-                        self.last_trade_time = current_time
-                self.scale_out_stage = 2
-            elif self.scale_out_stage < 1:
-                desired = 0.75 * self.position
-                reduce_qty = abs(self.position - desired)
-                if reduce_qty >= 0.1:
-                    side = Side.SELL if self.position > 0 else Side.BUY
-                    trade_price = self._get_tradeable_price(side)
-                    if trade_price is not None:
-                        place_market_order(side, Ticker.TEAM_A, reduce_qty)
-                        self.last_trade_time = current_time
-                self.scale_out_stage = 1
-        if target_units > 0:
-            if self.position >= 0:
-                add_qty = target_units - self.position
-                if add_qty >= 0.1:
-                    trade_price = self._get_tradeable_price(Side.BUY)
-                    if trade_price is not None:
-                        quantity = min(add_qty, self.capital_remaining / trade_price)
-                        if quantity >= 0.1:
-                            place_market_order(Side.BUY, Ticker.TEAM_A, quantity)
-                            self.update_curr_position_on_order(Side.BUY, quantity, trade_price)
-                            self.last_trade_time = current_time
-        elif target_units < 0:
-            if self.position <= 0:
-                add_qty = abs(target_units) - abs(self.position)
-                if add_qty >= 0.1:
-                    trade_price = self._get_tradeable_price(Side.SELL)
-                    if trade_price is not None:
-                        quantity = add_qty
-                        if quantity >= 0.1:
-                            place_market_order(Side.SELL, Ticker.TEAM_A, quantity)
-                            self.update_curr_position_on_order(Side.SELL, quantity, trade_price)
-                            self.last_trade_time = current_time
+        #     elif curr_edge_abs < 0.03 and self.scale_out_stage < 2:
+        #         desired = 0.5 * self.position
+        #         reduce_qty = abs(self.position - desired)
+        #         if reduce_qty >= 0.1:
+        #             side = Side.SELL if self.position > 0 else Side.BUY
+        #             trade_price = self._get_tradeable_price(side)
+        #             if trade_price is not None:
+        #                 place_market_order(side, Ticker.TEAM_A, reduce_qty)
+        #                 self.last_trade_time = current_time
+        #         self.scale_out_stage = 2
+        #     elif self.scale_out_stage < 1:
+        #         desired = 0.75 * self.position
+        #         reduce_qty = abs(self.position - desired)
+        #         if reduce_qty >= 0.1:
+        #             side = Side.SELL if self.position > 0 else Side.BUY
+        #             trade_price = self._get_tradeable_price(side)
+        #             if trade_price is not None:
+        #                 place_market_order(side, Ticker.TEAM_A, reduce_qty)
+        #                 self.last_trade_time = current_time
+        #         self.scale_out_stage = 1
+        # if target_units > 0:
+        #     if self.position >= 0:
+        #         add_qty = target_units - self.position
+        #         if add_qty >= 0.1:
+        #             trade_price = self._get_tradeable_price(Side.BUY)
+        #             if trade_price is not None:
+        #                 quantity = min(add_qty, self.capital_remaining / trade_price)
+        #                 if quantity >= 0.1:
+        #                     place_market_order(Side.BUY, Ticker.TEAM_A, quantity)
+        #                     self.update_curr_position_on_order(Side.BUY, quantity, trade_price)
+        #                     self.last_trade_time = current_time
+        # elif target_units < 0:
+        #     if self.position <= 0:
+        #         add_qty = abs(target_units) - abs(self.position)
+        #         if add_qty >= 0.1:
+        #             trade_price = self._get_tradeable_price(Side.SELL)
+        #             if trade_price is not None:
+        #                 quantity = add_qty
+        #                 if quantity >= 0.1:
+        #                     place_market_order(Side.SELL, Ticker.TEAM_A, quantity)
+        #                     self.update_curr_position_on_order(Side.SELL, quantity, trade_price)
+        #                     self.last_trade_time = current_time
 
     def on_trade_update(self, ticker: Ticker, side: Side, quantity: float, price: float) -> None:
         """Called when any trade occurs"""
@@ -493,7 +493,7 @@ class Strategy:
                 
         if not self.micro_edge_active and time_seconds is not None:
             if 200 <= time_seconds <= 1800:
-                if event_type == 'STEAL' or (event_type == 'REBOUND' and event.get('rebound_type') == 'OFFENSIVE'):
+                if event_type == 'STEAL' or (event_type == 'REBOUND' and event.get('rebound_type') == 'DEFENSIVE'):
                     if event_type == 'STEAL':
                         benefiting_team = home_away
                         prob_boost = self.MICRO_EDGE_STEAL_BOOST
@@ -696,6 +696,7 @@ class Strategy:
             
             opposite_side = Side.SELL if desired_side == Side.BUY else Side.BUY
             place_market_order(opposite_side, Ticker.TEAM_A, qty_to_reduce)
+            self.curr_position.quantity_of_position_purchased -= qty_to_reduce
 
             self.curr_position.cost_of_position -= qty_to_reduce * trade_price
 
