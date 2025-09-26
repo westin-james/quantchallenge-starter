@@ -32,47 +32,10 @@ def cancel_order(ticker: Ticker, order_id: int) -> bool:
 
 @dataclass
 class CurrPlayerState:
-    # player_id: str
-    # two_pt_attempts: int = 0
-    # two_pt_makes: int = 0
-
-    # real_offense: float = 0.0
-    # real_defense: float = 50.0
-
-    # minutes_on_floor: float = 0.0
-    # on_floor: bool = False
-
-    # three_pt_attempts: int = 0
-    # three_pt_makes: int = 0
-    # free_throw_attempts: int = 0
-    # free_throws_makes: int = 0
-
-    # offensive_rebounds: int = 0
-    # turnovers: int = 0
-    # assists: int = 0
-    # offensive_fouls: int = 0
-
-    # defensive_rebounds: int = 0
-    # steals: int = 0
-    # blocks: int = 0
-    # defensive_fouls: int = 0
-
-    # real_offensive_rating: float = 0.0
-    # real_defensive_rating: float = 0.0
-    # real_overall_rating: float = 0.0
-
-    # blended_offense_rating: float = 0.0
-    # blended_defense_rating: float = 50.0
-    # blended_overall_rating: float = 0.0
     pass
 
 @dataclass
 class CurrTeamState:
-    # roster: Dict[str, CurrPlayerState] = field(default_factory=dict)
-    # active_lineup: List[str] = field(default_factory=list)
-    # team_offensive_rating: float = 0.0
-    # team_defensive_rating: float = 50.0
-    # team_overall_rating: float = 0.0
     curr_total_points: int = 0
     expected_total_points: int = 0
     num_possessions: int = 0
@@ -171,7 +134,7 @@ class Strategy:
         self.peak_edge_abs_since_entry = 0.0
         self.scale_out_stage = 0
         # endgame helpers (no-OT locks)
-        self._initalize_orderbook()
+        self._initialize_orderbook()
 
     def __init__(self) -> None:
         """Initialize strategy"""
@@ -195,7 +158,7 @@ class Strategy:
 
         self.curr_position = Position()
 
-        self._initalize_orderbook()
+        self._initialize_orderbook()
 
         self.peak_edge_abs_since_entry: float = 0.0
         self.scale_out_stage: int = 0
@@ -239,24 +202,6 @@ class Strategy:
             elif side == Side.SELL and self.best_bid is not None:
                 return self.best_bid
             return None 
-        
-    # def _get_or_create_player(self, team: CurrTeamState, player_name: str) -> CurrPlayerState:
-    #         """Get player from roster or create new one"""
-    #         if player_name not in team.roster:
-    #             team.roster[player_name] = CurrPlayerState(
-    #                 player_id=player_name,
-    #                 real_offense=team.team_offensive_rating or 50.0,
-    #                 real_defense=50.0
-    #             )
-    #         return team.roster[player_name]
-    
-    # def _ensure_player_on_floor(self, team: CurrTeamState, player_name: Optional[str]) -> None:
-    #     if not team or not player_name:
-    #         return
-    #     p = self._get_or_create_player(team, player_name)
-    #     p.on_floor = True
-    #     if player_name not in team.active_lineup:
-    #         team.active_lineup.append(player_name)
 
     def _update_team_box_scores(self, event: dict) -> None:
         """Update player statistics from event"""
@@ -320,61 +265,7 @@ class Strategy:
             team.team_weight = min(max(tw, 0.0), 1.0)
 
         compute_four_factors(self.home_team, self.away_team)
-        compute_four_factors(self.away_team, self.home_team)
-
-
-            
-    # def _blend_ratings(self, player: CurrPlayerState, team_avg_offense: float) -> None:
-    #     """
-    #     This takes the offensive and defensive ratings, along with
-    #     time on the court, to determine the blended rating, until the
-    #     player has played enough players
-    #     """
-    #     if player.minutes_on_floor >= 10.0:
-    #         player.blended_offense_rating = player.real_offensive_rating
-    #         player.blended_defense_rating = player.real_defensive_rating
-    #     else:
-    #         blend_factor = player.minutes_on_floor / 10.0
-    #         player.blended_offense_rating = (
-    #             team_avg_offense * (1 - blend_factor) +
-    #             player.real_offensive_rating * blend_factor
-    #         )
-    #         player.blended_defense_rating = (
-    #             50.0 * (1 - blend_factor) +
-    #             player.real_defensive_rating * blend_factor
-    #         )
-    #     player.blended_overall_rating = (
-    #         0.7 * player.blended_offense_rating +
-    #         0.3 * player.blended_defense_rating
-    #     )
-
-    # def _update_team_ratings(self, team: CurrTeamState) -> None:
-    #     """Update team overall ratings from active lineup"""
-    #     if not team.active_lineup:
-    #         return
-        
-    #     active_players = [team.roster[pid] for pid in team.active_lineup if pid in team.roster]
-    #     if not team.active_lineup:
-    #         return
-        
-    #     team.team_offensive_rating = sum(p.blended_offense_rating for p in active_players) / len(active_players)
-    #     team.team_defensive_rating = sum(p.blended_defense_rating for p in active_players) / len(active_players)
-    #     team.team_overall_rating = sum(p.blended_overall_rating for p in active_players) / len(active_players)
-
-
-    # def _handle_substitution(self, team: CurrTeamState, event: dict) -> None:
-    #     """Handle player substitution"""
-    #     player_in = event.get('player_name')
-    #     player_out = event.get('substituted_player_name')
-
-    #     if player_in:
-    #         self._ensure_player_on_floor(team, player_in)
-
-    #     if player_out:
-    #         if player_out in team.active_lineup:
-    #             team.active_lineup.remove(player_out)
-    #         if player_out in team.roster:
-    #             team.roster[player_out].on_floor = False    
+        compute_four_factors(self.away_team, self.home_team) 
     
     def is_possession_ending_event(self, event_type: str) -> bool:
         return event_type in ['SCORE', 'REBOUND', 'TURNOVER']
@@ -395,23 +286,8 @@ class Strategy:
                 self.game_state.last_possession_start = current_time
 
     def _calculate_win_probability(self) -> float:
+        self._recompute_four_factors_and_team_weight()
         """calculate home team win probability"""
-
-        # remaining_possessions = 0.0
-        # if self.game_state.average_possession_length > 0:
-        #     remaining_possessions = self.game_state.time_remaining / self.game_state.average_possession_length
-
-        # home_ppp = 0.8 + (self.home_team.team_overall_rating / 100.0) * 0.6
-        # away_ppp = 0.8 + (self.away_team.team_overall_rating / 100) * 0.6
-
-        # expected_home = self.game_state.home_score + (remaining_possessions * home_ppp)
-        # expected_away = self.game_state.away_score + (remaining_possessions * away_ppp)
-
-        # point_diff = expected_home - expected_away
-        # z_score = point_diff / 10.0
-        # probability = 0.5 * (1 + math.erf(z_score / math.sqrt(2)))
-
-        # return max(0.005, min(0.995, probability))
 
         c = 3.0
         t_rem = max(self.game_state.time_remaining, 0.0)
@@ -437,38 +313,6 @@ class Strategy:
     def _enough_time_elapsed_to_make_new_trade(self, current_time: float) -> bool:
         """Check if enough time has passed since last trade"""
         return (current_time - self.last_trade_time) >= self.min_trade_interval
-    
-    #     trade_price = self._get_tradeable_price(desired_side)
-    #     if trade_price is None:
-    #         trade_price = market_price # graceful fallback if book side missing
-
-    #     # flip if needed
-    #     if self.curr_position.curr_active and self.curr_position.side_of_entry != desired_side:
-    #         self.execute_close_position()
-
-    #     if desired_side == Side.BUY:
-    #         qty = (alloc * self.capital_remaining) / max(trade_price, 1e-6)
-    #     else:
-    #         qty = (alloc * self.capital_remaining) / max(100.0 - trade_price, 1e-6)
-    #     if qty < 1.0:
-    #         return False
-        
-    #     place_market_order(desired_side, Ticker.TEAM_A, qty)
-    #     self.update_curr_position_on_order(desired_side, qty, trade_price)
-    #     self.last_endgame_action_tick = tick
-
-    #     print(f"[ENDGAME-LOCK] t={self.game_state.time_remaining:.2f}s "
-    #           f"lead={self.game_state.home_score - self.game_state.away_score} "
-    #           f"edge={(edge*100):.1f}% side={desired_side.name} qty={qty:.2f} px={trade_price:.2f} "
-    #           f"alloc={int(alloc*100)}%")
-    #     return True
-    
-    # def _maybe_apply_endgame_lock(self) -> bool:
-    #     """Detect & act; True if an order was placed."""
-    #     is_lock, p_true, reason = self._is_endgame_lock()
-    #     if not is_lock or p_true is None:
-    #         return False
-    #     return self._execute_endgame_strategy(p_true, reason)
 
     def calculate_current_edge(self) -> float:
         win_prob = self._calculate_win_probability()
@@ -491,18 +335,6 @@ class Strategy:
         current_edge = self.calculate_current_edge()
 
         return abs(current_edge) < 0.02
-
-        # if self.curr_position.side_of_entry == Side.BUY and current_edge < -0.05:
-        #     return True
-        
-        # if self.curr_position.side_of_entry == Side.SELL and current_edge > 0.05:
-        #     return True
-
-        # if abs(current_edge) < 0.02:
-        #     return True
-        
-        # return False
-
 
     def reset_curr_position(self) -> None:
         self.curr_position.curr_active = False
@@ -533,12 +365,6 @@ class Strategy:
         else:
             place_market_order(Side.BUY, Ticker.TEAM_A, abs(self.position))
         
-        # if self.curr_position.side_of_entry == Side.BUY:
-        #     place_market_order(Side.SELL, Ticker.TEAM_A, self.curr_position.quantity_of_position_purchased)
-
-        # if self.curr_position.side_of_entry == Side.SELL:
-        #     place_market_order(Side.BUY, Ticker.TEAM_A, self.curr_position.quantity_of_position_purchased)
-        
         self.reset_curr_position()
         
 
@@ -548,16 +374,6 @@ class Strategy:
         #new addition: allow endgame lock to run even when < 500s
         if self._maybe_apply_endgame_lock():
             return
-
-        # if self.game_state.time_remaining > 1500 or self.game_state.time_remaining < 500:
-        #     return
-        
-        # if not self._enough_time_elapsed_to_make_new_trade(current_time):
-        #     return
-        
-        # mid_price = self.last_trade_price
-        # if mid_price is None or self.capital_remaining is None:
-        #     return
         
         if self.should_close_position():
             self.execute_close_position()
@@ -638,35 +454,6 @@ class Strategy:
                             place_market_order(Side.SELL, Ticker.TEAM_A, quantity)
                             self.update_curr_position_on_order(Side.SELL, quantity, trade_price)
                             self.last_trade_time = current_time
-    
-
-        # #Rest of function only possible if there is no currently active position
-        # kelly_fraction = self.kelly.kelly_fraction(win_prob, mid_price)
-        # if abs(kelly_fraction) < 0.01:
-        #     return
-        
-        # target_units = self.kelly.target_units(self.capital_remaining, mid_price, kelly_fraction)
-        # position_change = target_units - self.position
-
-        # if abs(position_change) < 1.0:
-        #     return
-        
-        # if position_change > 0:
-        #     trade_price = self._get_tradeable_price(Side.BUY)
-        #     if trade_price is not None:
-        #         quantity = min(abs(position_change), self.capital_remaining / trade_price)
-        #         if quantity >= 1.0:
-        #             place_market_order(Side.BUY, Ticker.TEAM_A, quantity)
-        #             self.update_curr_position_on_order(Side.BUY, quantity, trade_price)
-        #             self.last_trade_time = current_time
-        # else:
-        #     trade_price = self._get_tradeable_price(Side.SELL)
-        #     if trade_price is not None:
-        #         quantity = min(abs(position_change), abs (self.position) if self.position < 0 else float('inf'))
-        #         if quantity >= 1.0:
-        #             place_market_order(Side.SELL, Ticker.TEAM_A, quantity)
-        #             self.update_curr_position_on_order(Side.SELL, quantity, trade_price)
-        #             self.last_trade_time = current_time
 
     def on_trade_update(self, ticker: Ticker, side: Side, quantity: float, price: float) -> None:
         """Called when any trade occurs"""
@@ -813,17 +600,17 @@ class Strategy:
             if abs_lead >= 6:
                 return True, home_prob_from_leader(0.999), "6-10s & lead>=6"
             if abs_lead >= 4:
-                return True, home_prob_from_leader(0.995), "6-10s & lead>=4 & <2 poss"
+                return True, home_prob_from_leader(0.995), "6-10s & lead>=4"
         
         # <=24s
         if t <= 24.0:
             if abs_lead >= 9:
-                return True, home_prob_from_leader(0.9995), "<=24s & lead>=7"
+                return True, home_prob_from_leader(0.9995), "<=24s & lead>=9"
             
         # <=35s
         if t <= 35.0:
             if abs_lead >= 10:
-                return True, home_prob_from_leader(0.9995), "<=35s & lead>=9"
+                return True, home_prob_from_leader(0.9995), "<=35s & lead>=10"
         return False, None, ""
         
     def _execute_endgame_strategy(self, true_home_prob: float, reason: str) -> bool:
@@ -854,7 +641,7 @@ class Strategy:
             if self.curr_position.side_of_entry != desired_side:
                 current_alloc = -1.0 * (self.curr_position.cost_of_position / (self.capital_remaining + self.curr_position.cost_of_position))
             else:
-                current_alloc = self.curr_psoition.cost_of_position / (self.capital_remaining + self.curr_position.cost_of_position)
+                current_alloc = self.curr_position.cost_of_position / (self.capital_remaining + self.curr_position.cost_of_position)
 
 
         alloc_change = target_alloc - current_alloc
@@ -892,7 +679,7 @@ class Strategy:
                 self.curr_position.quantity_of_position_purchased += qty
                 self.curr_position.cost_of_position += qty * trade_price
             else:
-                self.update_curr_posiiton_on_order(desired_side, qty, trade_price)
+                self.update_curr_position_on_order(desired_side, qty, trade_price)
         else:
             reduction_capital = abs(alloc_change) * total_capital
             if desired_side == Side.BUY:
@@ -900,6 +687,7 @@ class Strategy:
             else:
                 qty_to_reduce = reduction_capital / max(100.0 - trade_price, 1e-6)
 
+            self.curr_position.quantity_of_position_purchased -= qty_to_reduce
             qty_to_reduce = min(qty_to_reduce, self.curr_position.quantity_of_position_purchased)
 
             if qty_to_reduce < 1.0:
@@ -922,22 +710,6 @@ class Strategy:
             return False
         
         return self._execute_endgame_strategy(p_true, reason)
-
-            # market_prob = min(max(market_price / 100.0, 1e-6), 1 - 1e-6)
-            # edge = abs(true_home_prob - market_prob)
-            # if edge < 0.10:
-            #     return False
-            
-            # if edge >= 0.30:
-            #     alloc = 0.80
-            # elif edge >= 0.20:
-            #     alloc = 0.60
-            # else:
-            #     alloc = 0.40
-
-            # desired_side = Side.BUY if true_home_prob > market_prob else Side.SELL
-
-
 
     def on_orderbook_snapshot(self, ticker: Ticker, bids: list, asks: list) -> None:
         """Called with complete orderbook snapshot"""
@@ -998,41 +770,14 @@ class Strategy:
             'coordinate_x': coordinate_x,
             'coordinate_y': coordinate_y,
             'time_seconds': time_seconds
-
         }
+
+        self._handle_event_sequence_micro_edge(event)
 
         if home_away == "home":
             self.home_team.curr_total_points = home_score
         elif home_away == "away":
             self.away_team.curr_total_points = away_score
-
-        # if event_type == "JUMP_BALL" and target_team and player_name:
-        #     if player_name not in target_team.active_lineup:
-        #         target_team.active_lineup.append(player_name)
-        #         player_obj = self._get_or_create_player(target_team, player_name)
-        #         player_obj.on_floor = True
-
-        # if event_type == "SUBSTITUTION" and target_team:
-        #     self._handle_substitution(target_team, event)
-
-        # action_events = {"SCORE", "MISSED", "REBOUND", "STEAL", "BLOCK", "TURNOVER", "FOUL"}
-        # if target_team and event_type in action_events:
-        #     if player_name:
-        #         self._ensure_player_on_floor(target_team, player_name)
-        #     if assist_player:
-        #         self._ensure_player_on_floor(target_team, assist_player)
-        
-                         
-
-        # for team in [self.home_team, self.away_team]:
-        #     for player_id in team.active_lineup:
-        #         if player_id in team.roster:
-        #             player = team.roster[player_id]
-        #             self._update_player_stats(player, event)
-        #             self.compute_offensive_rating(player)
-        #             self.compute_defensive_rating(player)
-        #             self._blend_ratings(player, team.team_offensive_rating)
-        #     self._update_team_ratings(team)
 
         self._update_possession_tracking(event)
 
