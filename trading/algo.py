@@ -695,7 +695,7 @@ class Strategy:
                 should_exit = True
             elif event_type == 'REBOUND' and event.get('rebound_type') == 'DEFENSIVE':
                 should_exit = True
-            elif self.game_state.num_possessions_completed > self.micro_edge_entry_possesion + 1:
+            elif self.game_state.num_possessions_completed > self.micro_edge_entry_possession + 1:
                 should_exit = True
 
             if should_exit:
@@ -763,7 +763,7 @@ class Strategy:
         self.micro_edge_event_type = event_type
         self.micro_edge_position_size = quantity if side == Side.BUY else -quantity
         self.micro_edge_entry_time = time_seconds
-        self.micro_edge_entry_possesion = self.game_state.num_possessions_completed
+        self.micro_edge_entry_possession = self.game_state.num_possessions_completed
 
     def _exit_micro_edge_position(self) -> None:
         if not self.micro_edge_active or self.micro_edge_position_size == 0:
@@ -786,7 +786,7 @@ class Strategy:
         self.micro_edge_event_type = ""
         self.micro_edge_position_size = 0.0
         self.micro_edge_entry_time = None
-        self.micro_edge_entry_possesion = 0
+        self.micro_edge_entry_possession = 0
 
     def _is_endgame_lock(self):
         t = self.game_state.time_remaining or 0.0
