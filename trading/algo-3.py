@@ -298,6 +298,7 @@ class Strategy:
         possessions = max(self.game_state.possessions_seen, 0)
         lam = kappa * (possessions / (possessions + n0))
 
+        tw_edge = self.home_team.team_weight - self.away_team.team_weight
         tw_edge = max(min(tw_edge, 0.10), -0.10)
 
         score_diff = float(self.game_state.home_score - self.game_state.away_score)
