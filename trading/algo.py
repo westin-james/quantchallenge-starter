@@ -92,7 +92,8 @@ class CurrTeamState:
     ftr_live: float = 0.2
 
     efg_smooth: float = 0.5
-    tov_pct_smooth: float = 0.25
+    tov_pct_smooth: float = 0.12
+    orb_pct_smooth: float = 0.25
     ftr_smooth: float = 0.2
 
     team_weight: float = 0.5
