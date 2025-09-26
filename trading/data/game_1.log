@@ -1,0 +1,7 @@
+main    : Logging initialized!
+algo_print: [ENDGAME-LOCK] t=33.00s lead=9 edge=14.1% side=BUY qty=519.26 px=75.67 alloc=40%
+algo_print: [ENDGAME-LOCK] t=32.00s lead=9 edge=14.1% side=BUY qty=519.26 px=75.67 alloc=40%
+algo_print: [ENDGAME-LOCK] t=20.00s lead=11 edge=23.2% side=BUY qty=403.28 px=77.18 alloc=60%
+algo_print: [ENDGAME-LOCK] t=19.00s lead=11 edge=23.2% side=BUY qty=403.28 px=77.18 alloc=60%
+algo_print: [ENDGAME-LOCK] t=18.00s lead=11 edge=23.2% side=BUY qty=403.28 px=77.18 alloc=60%
+algo_print: [ENDGAME-LOCK] t=17.00s lead=11 edge=23.2% side=BUY qty=403.28 px=77.18 alloc=60%
